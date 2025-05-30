@@ -7,7 +7,7 @@ for type safety and validation.
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -150,3 +150,12 @@ class SlackEvent(BaseModel):
     ts: str
     channel: Optional[str] = None
     event_ts: str
+
+
+class ConversationContext(BaseModel):
+    """Context for ongoing conversations."""
+    user_id: str
+    channel_id: str
+    last_message_ts: str
+    context_data: Dict[str, Any] = {}
+    is_private: bool = False
