@@ -6,7 +6,7 @@ handling all database operations for the Autónomos Dona bot.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 
 from supabase import create_client, Client
@@ -380,6 +380,151 @@ class SupabaseService:
             
         except Exception as e:
             logger.error(f"Error updating user preferences: {e}", exc_info=True)
+            raise
+    
+    # Summary and analytics operations
+    def get_user_summary(self, user_id: str, period: str = "today") -> Dict[str, Any]:
+        """
+        Get activity summary for a user.
+        
+        Args:
+            user_id: Slack user ID
+            period: 'today' or 'week'
+            
+        Returns:
+            Summary dict with statistics
+        """
+        try:
+            # Get database user
+            user = self.get_or_create_user(user_id, settings.SLACK_WORKSPACE_ID)
+            db_user_id = user["id"]
+            
+            # Calculate date range
+            now = datetime.utcnow()
+            if period == "today":
+                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            else:  # week
+                start_date = now - timedelta(days=7)
+            
+            summary = {
+                "period": period,
+                "start_date": start_date.isoformat(),
+                "end_date": now.isoformat()
+            }
+            
+            # Get tasks statistics
+            all_tasks = self.get_user_tasks(user_id)
+            summary["total_tasks"] = len(all_tasks)
+            summary["tasks_by_status"] = {}
+            
+            for task in all_tasks:
+                status = task.get("status", "unknown")
+                summary["tasks_by_status"][status] = summary["tasks_by_status"].get(status, 0) + 1
+            
+            # Get tasks created in period
+            tasks_in_period = [
+                t for t in all_tasks 
+                if datetime.fromisoformat(t["created_at"].replace('Z', '+00:00')) >= start_date
+            ]
+            summary["tasks_created_in_period"] = len(tasks_in_period)
+            
+            # Get completed tasks in period
+            completed_in_period = [
+                t for t in all_tasks 
+                if t.get("status") == "completed" and t.get("completed_at") and
+                datetime.fromisoformat(t["completed_at"].replace('Z', '+00:00')) >= start_date
+            ]
+            summary["tasks_completed_in_period"] = len(completed_in_period)
+            
+            # Get activity count
+            activities_query = self.client.table("activity_logs").select("*").eq(
+                "user_id", db_user_id
+            ).gte("created_at", start_date.isoformat())
+            
+            activities_result = activities_query.execute()
+            activities = activities_result.data if activities_result else []
+            
+            summary["total_activities"] = len(activities)
+            summary["activities_by_type"] = {}
+            
+            for activity in activities:
+                activity_type = activity.get("activity_type", "unknown")
+                summary["activities_by_type"][activity_type] = summary["activities_by_type"].get(activity_type, 0) + 1
+            
+            # Get conversation count
+            conversations_query = self.client.table("conversations").select("*").eq(
+                "user_id", db_user_id
+            ).gte("created_at", start_date.isoformat())
+            
+            conversations_result = conversations_query.execute()
+            summary["conversations_started"] = len(conversations_result.data) if conversations_result else 0
+            
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Error getting user summary: {e}", exc_info=True)
+            raise
+    
+    def get_user_statistics(self, user_id: str) -> Dict[str, Any]:
+        """
+        Get overall statistics for a user.
+        
+        Args:
+            user_id: Slack user ID
+            
+        Returns:
+            Statistics dict
+        """
+        try:
+            # Get database user
+            user = self.get_or_create_user(user_id, settings.SLACK_WORKSPACE_ID)
+            db_user_id = user["id"]
+            
+            stats = {
+                "user_id": user_id,
+                "member_since": user.get("created_at", "unknown")
+            }
+            
+            # Task statistics
+            tasks = self.get_user_tasks(user_id)
+            stats["total_tasks"] = len(tasks)
+            stats["pending_tasks"] = len([t for t in tasks if t.get("status") == "pending"])
+            stats["completed_tasks"] = len([t for t in tasks if t.get("status") == "completed"])
+            
+            # Calculate completion rate
+            if stats["total_tasks"] > 0:
+                stats["completion_rate"] = round(stats["completed_tasks"] / stats["total_tasks"] * 100, 1)
+            else:
+                stats["completion_rate"] = 0
+            
+            # Activity statistics
+            activities_result = self.client.table("activity_logs").select("*").eq(
+                "user_id", db_user_id
+            ).execute()
+            
+            activities = activities_result.data if activities_result else []
+            stats["total_activities"] = len(activities)
+            
+            # Most common activity
+            activity_counts = {}
+            for activity in activities:
+                activity_type = activity.get("activity_type", "unknown")
+                activity_counts[activity_type] = activity_counts.get(activity_type, 0) + 1
+            
+            if activity_counts:
+                stats["most_common_activity"] = max(activity_counts.items(), key=lambda x: x[1])[0]
+            else:
+                stats["most_common_activity"] = "none"
+            
+            # Preferences
+            prefs = self.get_user_preferences(user_id)
+            stats["language"] = prefs.get("language", "es")
+            stats["timezone"] = prefs.get("timezone", "America/Mexico_City")
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Error getting user statistics: {e}", exc_info=True)
             raise
     
     # Time tracking operations

@@ -323,38 +323,79 @@ def handle_summary_command(ack: Ack, respond: Respond, command: Dict[str, Any]) 
     text = command.get("text", "today").strip().lower()
     user_id = command.get("user_id")
     
+    # Get services
+    supabase = get_supabase_service()
+    
     try:
-        if text == "today" or text == "hoy":
-            summary = f"""
-            :calendar: *Resumen de Hoy*
-            
-            *Tareas completadas:* 3
-            *Reuniones:* 2 (1h 30m total)
-            *Mensajes importantes:* 5
-            
-            *Pendientes prioritarios:*
-            • Revisar propuesta de marketing
-            • Responder email de inversor
-            • Preparar presentación semanal
-            """
-        elif text == "week" or text == "semana":
-            summary = f"""
-            :chart_with_upwards_trend: *Resumen Semanal*
-            
-            *Tareas:* 15 completadas, 8 pendientes
-            *Reuniones:* 12 (8h 45m total)
-            *Productividad:* 87% vs semana anterior
-            
-            *Logros destacados:*
-            • Cerrado acuerdo con cliente X
-            • Lanzamiento de feature Y
-            • 3 entrevistas completadas
-            """
+        # Determine period
+        if text in ["today", "hoy"]:
+            period = "today"
+            period_text = "Hoy"
+        elif text in ["week", "semana"]:
+            period = "week"
+            period_text = "Esta Semana"
         else:
-            summary = "Por favor especifica 'today/hoy' o 'week/semana'"
+            respond("Por favor especifica 'today/hoy' o 'week/semana'")
+            return
         
-        respond(summary)
-        logger.info(f"Summary requested by user {user_id}: {text}")
+        # Get summary data
+        summary_data = supabase.get_user_summary(user_id, period)
+        
+        # Format summary
+        lines = [f":calendar: *Resumen de {period_text}*\n"]
+        
+        # Tasks section
+        tasks_created = summary_data.get("tasks_created_in_period", 0)
+        tasks_completed = summary_data.get("tasks_completed_in_period", 0)
+        pending_tasks = summary_data.get("tasks_by_status", {}).get("pending", 0)
+        
+        lines.append("*📋 Tareas:*")
+        lines.append(f"• Creadas: {tasks_created}")
+        lines.append(f"• Completadas: {tasks_completed}")
+        lines.append(f"• Pendientes totales: {pending_tasks}")
+        
+        # Activity section
+        total_activities = summary_data.get("total_activities", 0)
+        activities_by_type = summary_data.get("activities_by_type", {})
+        
+        if total_activities > 0:
+            lines.append("\n*📊 Actividad:*")
+            lines.append(f"• Total de interacciones: {total_activities}")
+            
+            # Show top activities
+            if activities_by_type:
+                top_activities = sorted(activities_by_type.items(), key=lambda x: x[1], reverse=True)[:3]
+                for activity_type, count in top_activities:
+                    activity_name = activity_type.replace("_", " ").title()
+                    lines.append(f"• {activity_name}: {count}")
+        
+        # Conversations
+        conversations = summary_data.get("conversations_started", 0)
+        if conversations > 0:
+            lines.append(f"\n*💬 Conversaciones iniciadas:* {conversations}")
+        
+        # Productivity insight
+        if tasks_created > 0:
+            if tasks_completed >= tasks_created:
+                lines.append("\n✨ *¡Excelente!* Completaste todas las tareas creadas y más.")
+            elif tasks_completed > 0:
+                completion_rate = round(tasks_completed / tasks_created * 100)
+                lines.append(f"\n📈 *Productividad:* {completion_rate}% de tareas creadas fueron completadas.")
+        
+        # Pending tasks reminder
+        if pending_tasks > 0:
+            lines.append(f"\n💡 *Recordatorio:* Tienes {pending_tasks} tareas pendientes. Usa `/dona-task list` para verlas.")
+        
+        respond("\n".join(lines))
+        
+        # Log activity
+        supabase.log_activity({
+            "slack_user_id": user_id,
+            "activity_type": "summary_viewed",
+            "metadata": {"period": period}
+        })
+        
+        logger.info(f"Summary requested by user {user_id}: {period}")
         
     except Exception as e:
         logger.error(f"Error generating summary: {e}", exc_info=True)
@@ -409,20 +450,84 @@ def handle_status_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -
     
     user_id = command.get("user_id")
     
+    # Get services
+    supabase = get_supabase_service()
+    slack_service = get_slack_service()
+    
     try:
-        # TODO: Fetch actual data from Supabase
-        status_text = f"""
-        :chart_with_upwards_trend: *Your Status*
+        # Get user statistics
+        stats = supabase.get_user_statistics(user_id)
         
-        *Active Tasks:* 3
-        *Time Today:* 5h 30m
-        *This Week:* 24h 15m
+        # Get user info from Slack
+        user_info = slack_service.get_user_info(user_id)
+        user_name = user_info.get("real_name", "User") if user_info else "User"
         
-        *Current Activity:* Working on "Fix login bug"
-        *Started:* 2:15 PM
-        """
+        # Format member since date
+        member_since = stats.get("member_since", "unknown")
+        if member_since != "unknown":
+            try:
+                member_date = datetime.fromisoformat(member_since.replace('Z', '+00:00'))
+                member_since_text = member_date.strftime("%B %d, %Y")
+            except:
+                member_since_text = "recently"
+        else:
+            member_since_text = "recently"
         
-        respond(status_text)
+        # Build status message
+        lines = [
+            f":chart_with_upwards_trend: *Status for {user_name}*\n",
+            f"*Member since:* {member_since_text}",
+            f"*Language:* {'Spanish' if stats.get('language') == 'es' else 'English'}",
+            f"*Timezone:* {stats.get('timezone', 'Not set')}",
+            "\n*📊 Task Statistics:*",
+            f"• Total tasks: {stats.get('total_tasks', 0)}",
+            f"• Pending: {stats.get('pending_tasks', 0)}",
+            f"• Completed: {stats.get('completed_tasks', 0)}",
+            f"• Completion rate: {stats.get('completion_rate', 0)}%"
+        ]
+        
+        # Activity stats
+        total_activities = stats.get("total_activities", 0)
+        if total_activities > 0:
+            lines.extend([
+                "\n*🎯 Activity Overview:*",
+                f"• Total interactions: {total_activities}",
+                f"• Most common activity: {stats.get('most_common_activity', 'none').replace('_', ' ').title()}"
+            ])
+        
+        # Current status
+        pending = stats.get("pending_tasks", 0)
+        if pending > 0:
+            lines.append(f"\n*🔔 Current Status:* You have {pending} pending tasks")
+        else:
+            lines.append("\n*✅ Current Status:* All caught up! No pending tasks")
+        
+        # Productivity tip
+        completion_rate = stats.get("completion_rate", 0)
+        if completion_rate >= 80:
+            lines.append("\n💪 *Great job!* Your completion rate is excellent!")
+        elif completion_rate >= 50:
+            lines.append("\n📈 *Keep it up!* You're making good progress on your tasks.")
+        elif stats.get("total_tasks", 0) > 0:
+            lines.append("\n💡 *Tip:* Try breaking down large tasks into smaller, manageable pieces.")
+        
+        # Quick actions
+        lines.extend([
+            "\n*Quick Actions:*",
+            "• `/dona-task list` - View your tasks",
+            "• `/dona-summary today` - See today's summary",
+            "• `/dona-config` - Update preferences"
+        ])
+        
+        respond("\n".join(lines))
+        
+        # Log activity
+        supabase.log_activity({
+            "slack_user_id": user_id,
+            "activity_type": "status_viewed",
+            "metadata": {"completion_rate": completion_rate}
+        })
+        
         logger.info(f"Status command executed by user {user_id}")
         
     except Exception as e:
