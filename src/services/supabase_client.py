@@ -93,7 +93,7 @@ class SupabaseService:
             }
             
             result = self.client.table("tasks").insert(task).execute()
-            logger.info(f"Created task for user {user_id}")
+            logger.info(f"Created task for user {task_data.get('assigned_to')}")
             return result.data[0]
             
         except Exception as e:

@@ -194,7 +194,7 @@ class SlackService:
         if task.get("created_at"):
             fields.append({
                 "type": "mrkdwn",
-                "text": f"*Created:* <!date^{int(task['created_at'].timestamp())}^{date_short_pretty}|{task['created_at'].strftime('%Y-%m-%d')}>"
+                "text": f"*Created:* <!date^{int(task['created_at'].timestamp())}^{{date_short_pretty}}|{task['created_at'].strftime('%Y-%m-%d')}>"
             })
         
         if fields:
