@@ -1,0 +1,82 @@
+_metadata:
+  major_version: 2
+
+display_information:
+  name: Autónomos Dona
+  description: AI-powered executive assistant for the Autónomos team
+  background_color: "#1a1a1a"
+
+features:
+  app_home:
+    home_tab_enabled: true
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Autónomos Dona
+    always_online: true
+  slash_commands:
+    - command: /dona
+      description: Talk to Dona in natural language
+      usage_hint: "[your request]"
+      should_escape: false
+    - command: /dona-help
+      description: Show help and available commands
+      usage_hint: ""
+      should_escape: false
+    - command: /dona-task
+      description: Manage your tasks
+      usage_hint: "create|list|complete [task details]"
+      should_escape: false
+    - command: /dona-remind
+      description: Set a reminder
+      usage_hint: "[when] [message]"
+      should_escape: false
+    - command: /dona-summary
+      description: View activity summary
+      usage_hint: "today|week"
+      should_escape: false
+    - command: /dona-status
+      description: View your current status and statistics
+      usage_hint: ""
+      should_escape: false
+    - command: /dona-config
+      description: Configure your preferences
+      usage_hint: "[setting] [value]"
+      should_escape: false
+    - command: /dona-metrics
+      description: View system metrics (admin only)
+      usage_hint: ""
+      should_escape: false
+    - command: /dona-limits
+      description: Check your rate limit status
+      usage_hint: ""
+      should_escape: false
+
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - channels:history
+      - channels:read
+      - chat:write
+      - commands
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - im:write
+      - reactions:read
+      - users:read
+      - users:read.email
+
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_home_opened
+      - app_mention
+      - message.im
+      - reaction_added
+  interactivity:
+    is_enabled: true
+  org_deploy_enabled: false
+  socket_mode_enabled: true

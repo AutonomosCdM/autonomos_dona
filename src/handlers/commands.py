@@ -105,7 +105,22 @@ def handle_dona_command(ack: Ack, respond: Respond, command: Dict[str, Any], con
         
         # Process natural language commands
         if "help" in text.lower():
-            handle_help_command(ack, respond, command)
+            # Call help handler without ack since it's already been called
+            help_response = """
+:wave: *¡Hola! Soy Dona, tu asistente ejecutiva.*
+
+*Comandos disponibles:*
+• `/dona [texto]` - Habla conmigo en lenguaje natural
+• `/dona-help` - Ver esta ayuda
+• `/dona-task` - Gestionar tareas
+• `/dona-remind` - Crear recordatorios
+• `/dona-summary` - Ver resumen de actividad
+• `/dona-status` - Ver tu estado actual
+• `/dona-config` - Configurar preferencias
+
+¡Estoy aquí para ayudarte! :robot_face:
+"""
+            respond(help_response)
         elif any(word in text.lower() for word in ["task", "tarea", "hacer"]):
             respond("I understand you want to create a task. Use `/dona-task create [description]` or I can help you organize it.")
         elif any(word in text.lower() for word in ["remind", "recordar", "recordatorio"]):
