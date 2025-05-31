@@ -123,13 +123,13 @@ class SlackService:
                 "cancelled": ":x:"
             }.get(task.get("status", "pending"), ":white_circle:")
             
-            title = task.get("title", "Untitled")
+            # Use description as title since our tasks don't have separate title field
+            description = task.get("description", "Untitled task")
             task_id = task.get("id", "")
+            priority = task.get("priority", "medium")
             
-            lines.append(f"{i}. {status_emoji} *{title}* (#{task_id})")
-            
-            if task.get("description"):
-                lines.append(f"   _{task['description']}_")
+            lines.append(f"{i}. {status_emoji} *{description}*")
+            lines.append(f"   ID: `{task_id[:8]}...` | Priority: {priority}")
         
         return "\n".join(lines)
     

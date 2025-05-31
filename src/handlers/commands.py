@@ -13,7 +13,7 @@ from slack_bolt import App, Ack, Respond
 from slack_sdk.web import SlackResponse
 
 from src.models.schemas import Task, TaskStatus, ConversationContext
-from src.services.supabase_client import SupabaseService
+from src.services.supabase_client import SupabaseService, get_supabase_service
 from src.services.slack_client import get_slack_service
 from src.utils.config import settings
 from src.utils.metrics import metrics_collector
@@ -39,6 +39,7 @@ def register_command_handlers(app: App) -> None:
     app.command("/dona-status")(handle_status_command)
     app.command("/dona-metrics")(handle_metrics_command)
     app.command("/dona-limits")(handle_limits_command)
+    app.command("/dona-config")(handle_config_command)
     
     logger.info("Command handlers registered")
 
@@ -187,7 +188,7 @@ def handle_task_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -> 
     user_id = command.get("user_id")
     
     if not text:
-        respond("Please specify an action: `create`, `list`, or `update`")
+        respond("Please specify an action: `create`, `list`, `complete`, or `update`\n\nExamples:\n• `/dona-task create Review marketing proposal`\n• `/dona-task list`\n• `/dona-task complete [task-id]`")
         return
     
     parts = text.split(" ", 1)
@@ -227,26 +228,64 @@ def handle_task_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -> 
             app = command.get("app") or command.get("client")
             supabase: SupabaseService = app._supabase
             
+            # Check for status filter
+            status_filter = parts[1] if len(parts) > 1 else None
+            
             # Fetch user's tasks
-            tasks = supabase.get_user_tasks(user_id)
+            tasks = supabase.get_user_tasks(user_id, status=status_filter)
             
             if not tasks:
-                respond("No tienes tareas pendientes. ¡Buen trabajo! :tada:")
+                if status_filter:
+                    respond(f"No tienes tareas con estado '{status_filter}'")
+                else:
+                    respond("No tienes tareas pendientes. ¡Buen trabajo! :tada:")
                 return
             
-            task_list = "*Tus tareas:*\n\n"
-            for task in tasks:
-                status_emoji = ":white_circle:" if task["status"] == "pending" else ":green_circle:"
-                task_list += f"{status_emoji} *{task['description']}*\n"
-                task_list += f"   ID: {task['id']} | Prioridad: {task['priority']}\n\n"
+            # Format task list using SlackService
+            slack_service = get_slack_service()
+            task_list = slack_service.format_task_list(tasks)
             
             respond(task_list)
             
+        elif action == "complete":
+            if len(parts) < 2:
+                respond("Please provide the task ID to complete. Use `/dona-task list` to see your tasks.")
+                return
+            
+            task_id = parts[1].strip()
+            
+            # Get Supabase service
+            app = command.get("app") or command.get("client")
+            supabase: SupabaseService = app._supabase
+            
+            try:
+                # Update task status
+                updates = {
+                    "status": TaskStatus.COMPLETED.value,
+                    "completed_at": datetime.utcnow().isoformat()
+                }
+                result = supabase.update_task(task_id, updates)
+                
+                respond(f"✅ Task completed: *{result.get('description', 'Task')}*\n\nGreat job! 🎉")
+                
+                # Log activity
+                supabase.log_activity({
+                    "slack_user_id": user_id,
+                    "activity_type": "task_completed",
+                    "entity_type": "task",
+                    "entity_id": task_id,
+                    "metadata": {"task_description": result.get('description')}
+                })
+                
+            except Exception as e:
+                logger.error(f"Error completing task: {e}")
+                respond(f"Could not complete task with ID: {task_id}. Please check the ID and try again.")
+            
         elif action == "update":
-            respond("Task update functionality coming soon!")
+            respond("Task update functionality coming soon! For now, you can complete tasks with `/dona-task complete [task-id]`")
             
         else:
-            respond(f"Unknown action: {action}. Use `create`, `list`, or `update`")
+            respond(f"Unknown action: {action}. Use `create`, `list`, `complete`, or `update`")
             
     except Exception as e:
         logger.error(f"Error handling task command: {e}", exc_info=True)
@@ -484,3 +523,163 @@ def handle_limits_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -
     except Exception as e:
         logger.error(f"Error handling limits command: {e}", exc_info=True)
         respond("An error occurred while checking rate limits. Please try again.")
+
+
+def handle_config_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -> None:
+    """
+    Handle the /dona-config command for user preferences.
+    
+    Allows users to view and update their personal preferences.
+    """
+    ack()
+    
+    user_id = command.get("user_id")
+    text = command.get("text", "").strip()
+    
+    # Get services
+    slack_service = get_slack_service()
+    supabase = get_supabase_service()
+    
+    try:
+        # Parse command
+        parts = text.split(maxsplit=1) if text else []
+        action = parts[0].lower() if parts else "show"
+        
+        if action == "show" or not text:
+            # Show current preferences
+            prefs = supabase.get_user_preferences(user_id)
+            
+            lines = [
+                "*Your Current Preferences:*\n",
+                f"*Language:* {prefs['language']} ({'Spanish' if prefs['language'] == 'es' else 'English'})",
+                f"*Timezone:* {prefs['timezone']}",
+                f"*Working Hours:* {prefs['working_hours']['start']} - {prefs['working_hours']['end']}",
+                f"*Working Days:* {', '.join(prefs['working_hours']['days']).title()}",
+                "\n*Notification Settings:*"
+            ]
+            
+            notifications = prefs['notification_settings']
+            lines.append(f"• Task Reminders: {'✅' if notifications['task_reminders'] else '❌'}")
+            lines.append(f"• Daily Summary: {'✅' if notifications['daily_summary'] else '❌'}")
+            lines.append(f"• Meeting Alerts: {'✅' if notifications['meeting_alerts'] else '❌'}")
+            lines.append(f"• DM Notifications: {'✅' if notifications['dm_notifications'] else '❌'}")
+            
+            lines.append("\n_Use `/dona-config help` to see how to update preferences._")
+            
+            respond("\n".join(lines))
+            
+        elif action == "help":
+            # Show help
+            help_text = """
+*How to use /dona-config:*
+
+• `/dona-config` - Show current preferences
+• `/dona-config language [es|en]` - Set language
+• `/dona-config timezone [timezone]` - Set timezone (e.g., America/Mexico_City)
+• `/dona-config notifications [type] [on|off]` - Toggle notifications
+• `/dona-config working-hours [start] [end]` - Set working hours (e.g., 09:00 18:00)
+
+*Notification Types:*
+• `task-reminders` - Reminders for tasks
+• `daily-summary` - Daily activity summary
+• `meeting-alerts` - Meeting notifications
+• `dm-notifications` - Direct message alerts
+
+*Examples:*
+• `/dona-config language en`
+• `/dona-config timezone America/New_York`
+• `/dona-config notifications task-reminders off`
+• `/dona-config working-hours 08:00 17:00`
+            """
+            respond(help_text)
+            
+        elif action == "language":
+            # Update language
+            if len(parts) < 2:
+                respond("Please specify a language: `es` (Spanish) or `en` (English)")
+                return
+            
+            lang = parts[1].lower()
+            if lang not in ["es", "en"]:
+                respond("Language must be `es` (Spanish) or `en` (English)")
+                return
+            
+            supabase.update_user_preferences(user_id, {"language": lang})
+            lang_name = "Spanish" if lang == "es" else "English"
+            respond(f"✅ Language updated to {lang_name}")
+            
+        elif action == "timezone":
+            # Update timezone
+            if len(parts) < 2:
+                respond("Please specify a timezone (e.g., America/Mexico_City)")
+                return
+            
+            timezone = parts[1]
+            # In production, validate timezone against pytz
+            supabase.update_user_preferences(user_id, {"timezone": timezone})
+            respond(f"✅ Timezone updated to {timezone}")
+            
+        elif action == "notifications":
+            # Update notification settings
+            if len(parts) < 2:
+                respond("Please specify notification type and on/off. See `/dona-config help`")
+                return
+            
+            notif_parts = parts[1].split()
+            if len(notif_parts) < 2:
+                respond("Please specify both notification type and on/off")
+                return
+            
+            notif_type = notif_parts[0].replace("-", "_")
+            enabled = notif_parts[1].lower() == "on"
+            
+            valid_types = ["task_reminders", "daily_summary", "meeting_alerts", "dm_notifications"]
+            if notif_type not in valid_types:
+                respond(f"Invalid notification type. Valid types: {', '.join(valid_types)}")
+                return
+            
+            updates = {"notification_settings": {notif_type: enabled}}
+            supabase.update_user_preferences(user_id, updates)
+            
+            status = "enabled" if enabled else "disabled"
+            respond(f"✅ {notif_type.replace('_', ' ').title()} {status}")
+            
+        elif action == "working-hours":
+            # Update working hours
+            if len(parts) < 2:
+                respond("Please specify start and end times (e.g., 09:00 18:00)")
+                return
+            
+            times = parts[1].split()
+            if len(times) < 2:
+                respond("Please specify both start and end times")
+                return
+            
+            start_time = times[0]
+            end_time = times[1]
+            
+            # Basic validation
+            if not (len(start_time) == 5 and len(end_time) == 5 and 
+                    start_time[2] == ":" and end_time[2] == ":"):
+                respond("Times must be in HH:MM format (e.g., 09:00)")
+                return
+            
+            updates = {"working_hours": {"start": start_time, "end": end_time}}
+            supabase.update_user_preferences(user_id, updates)
+            
+            respond(f"✅ Working hours updated to {start_time} - {end_time}")
+            
+        else:
+            respond(f"Unknown action: {action}. Use `/dona-config help` for available options.")
+        
+        # Log activity
+        supabase.log_activity({
+            "slack_user_id": user_id,
+            "activity_type": "config_update",
+            "entity_type": "user_preferences",
+            "metadata": {"action": action, "command": text}
+        })
+        
+    except Exception as e:
+        logger.error(f"Error handling config command: {e}", exc_info=True)
+        respond("An error occurred while updating preferences. Please try again.")

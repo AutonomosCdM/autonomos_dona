@@ -124,7 +124,7 @@ class SupabaseService:
             logger.error(f"Error fetching tasks: {e}", exc_info=True)
             raise
     
-    def update_task(self, task_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+    def update_task(self, task_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update a task.
         
@@ -291,6 +291,95 @@ class SupabaseService:
             
         except Exception as e:
             logger.error(f"Error logging activity: {e}", exc_info=True)
+            raise
+    
+    # User preferences operations
+    def get_user_preferences(self, user_id: str) -> Dict[str, Any]:
+        """
+        Get user preferences.
+        
+        Args:
+            user_id: Slack user ID
+            
+        Returns:
+            User preferences dict
+        """
+        try:
+            # Get database user
+            user = self.get_or_create_user(user_id, settings.SLACK_WORKSPACE_ID)
+            
+            # Get preferences
+            result = self.client.table("user_preferences").select("*").eq(
+                "user_id", user["id"]
+            ).execute()
+            
+            if result.data:
+                return result.data[0]
+            
+            # Create default preferences
+            default_prefs = {
+                "user_id": user["id"],
+                "language": "es",
+                "timezone": "America/Mexico_City",
+                "notification_settings": {
+                    "task_reminders": True,
+                    "daily_summary": True,
+                    "meeting_alerts": True,
+                    "dm_notifications": True
+                },
+                "working_hours": {
+                    "start": "09:00",
+                    "end": "18:00",
+                    "days": ["monday", "tuesday", "wednesday", "thursday", "friday"]
+                },
+                "created_at": datetime.utcnow().isoformat()
+            }
+            
+            result = self.client.table("user_preferences").insert(default_prefs).execute()
+            return result.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error getting user preferences: {e}", exc_info=True)
+            raise
+    
+    def update_user_preferences(self, user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update user preferences.
+        
+        Args:
+            user_id: Slack user ID
+            updates: Fields to update
+            
+        Returns:
+            Updated preferences
+        """
+        try:
+            # Get database user
+            user = self.get_or_create_user(user_id, settings.SLACK_WORKSPACE_ID)
+            
+            # Get current preferences
+            current_prefs = self.get_user_preferences(user_id)
+            
+            # Merge updates
+            if "notification_settings" in updates and isinstance(updates["notification_settings"], dict):
+                current_prefs["notification_settings"].update(updates["notification_settings"])
+                updates["notification_settings"] = current_prefs["notification_settings"]
+            
+            if "working_hours" in updates and isinstance(updates["working_hours"], dict):
+                current_prefs["working_hours"].update(updates["working_hours"])
+                updates["working_hours"] = current_prefs["working_hours"]
+            
+            updates["updated_at"] = datetime.utcnow().isoformat()
+            
+            result = self.client.table("user_preferences").update(updates).eq(
+                "id", current_prefs["id"]
+            ).execute()
+            
+            logger.info(f"Updated preferences for user {user_id}")
+            return result.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error updating user preferences: {e}", exc_info=True)
             raise
     
     # Time tracking operations
