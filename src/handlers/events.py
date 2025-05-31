@@ -59,24 +59,50 @@ def handle_app_mention(event: Dict[str, Any], say: Any, context: BoltContext) ->
         privacy_level = slack_service.context_manager.get_privacy_level(context_type)
         
         # Log the conversation
+        conversation = None
         if supabase:
-            conversation_data = {
-                "slack_channel_id": channel,
-                "user_id": user,
-                "context_type": context_type.value,
-                "status": "active"
-            }
-            # TODO: Create conversation record
+            try:
+                conversation = supabase.get_or_create_conversation(
+                    channel_id=channel,
+                    user_id=user,
+                    context_type=context_type.value,
+                    thread_ts=event.get("thread_ts")
+                )
+                
+                # Log the user's message
+                supabase.log_message({
+                    "conversation_id": conversation["id"],
+                    "sender_type": "user",
+                    "sender_id": user,
+                    "content": text,
+                    "slack_message_ts": event.get("ts"),
+                    "metadata": {"event_type": "app_mention"}
+                })
+                
+                # Log activity
+                supabase.log_activity({
+                    "slack_user_id": user,
+                    "activity_type": "app_mention",
+                    "entity_type": "conversation",
+                    "entity_id": conversation["id"],
+                    "metadata": {"channel": channel, "context_type": context_type.value}
+                })
+            except Exception as e:
+                logger.error(f"Error logging conversation: {e}")
         
         # Remove the bot mention from the text
         bot_mention = f"<@{context.get('bot_user_id')}>"
         clean_text = text.replace(bot_mention, "").strip()
         
         # Process natural language
+        response_message = None
+        intent_detected = None
+        
         if any(word in clean_text.lower() for word in ["help", "ayuda", "como"]):
+            intent_detected = "help_request"
             # Customize response based on context
             if context_type == ContextType.PRIVATE:
-                help_message = (
+                response_message = (
                     f"¡Hola <@{user}>! :wave:\n"
                     "Soy Dona, tu asistente ejecutiva personal. En este espacio privado puedo ayudarte con:\n"
                     "• `/dona` - Habla conmigo en lenguaje natural\n"
@@ -87,7 +113,7 @@ def handle_app_mention(event: Dict[str, Any], say: Any, context: BoltContext) ->
                     "_💡 Todo lo que compartas aquí es confidencial._"
                 )
             else:
-                help_message = (
+                response_message = (
                     f"¡Hola <@{user}>! :wave:\n"
                     "Soy Dona, asistente ejecutiva del equipo. Puedo ayudar con:\n"
                     "• `/dona` - Habla conmigo en lenguaje natural\n"
@@ -96,27 +122,47 @@ def handle_app_mention(event: Dict[str, Any], say: Any, context: BoltContext) ->
                     "• `/dona-summary` - Ver resumen de actividades\n\n"
                     "_Para asuntos privados, háblame por mensaje directo._"
                 )
-            say(help_message)
+            say(response_message)
         elif any(word in clean_text.lower() for word in ["task", "tarea", "hacer"]):
-            say(
+            intent_detected = "task_request"
+            response_message = (
                 f"<@{user}>, para crear una tarea usa:\n"
                 "`/dona-task create [descripción]`\n\n"
                 "O simplemente dime qué necesitas hacer con `/dona necesito...`"
             )
+            say(response_message)
         elif any(word in clean_text.lower() for word in ["meeting", "reunión", "agendar"]):
-            say(
+            intent_detected = "meeting_request"
+            response_message = (
                 f"<@{user}>, pronto podré ayudarte a agendar reuniones. "
                 "Por ahora, puedo crear recordatorios con:\n"
                 "`/dona-remind [cuándo] [mensaje]`"
             )
+            say(response_message)
         else:
-            say(
+            intent_detected = "unknown"
+            response_message = (
                 f"<@{user}>, escuché: _{clean_text}_\n\n"
                 "Estoy aprendiendo a entender mejor el lenguaje natural. "
                 "Por ahora, usa `/dona` seguido de tu solicitud o `/dona-help` para ver comandos disponibles."
             )
+            say(response_message)
+        
+        # Log Dona's response
+        if supabase and conversation and response_message:
+            try:
+                supabase.log_message({
+                    "conversation_id": conversation["id"],
+                    "sender_type": "dona",
+                    "sender_id": context.get('bot_user_id', 'dona'),
+                    "content": response_message,
+                    "intent_detected": intent_detected,
+                    "metadata": {"response_to": event.get("ts")}
+                })
+            except Exception as e:
+                logger.error(f"Error logging bot response: {e}")
             
-        logger.info(f"App mention handled for user {user}")
+        logger.info(f"App mention handled for user {user} with intent: {intent_detected}")
         
     except Exception as e:
         logger.error(f"Error handling app mention: {e}", exc_info=True)
@@ -147,14 +193,36 @@ def handle_message(event: Dict[str, Any], say: Any, context: BoltContext) -> Non
         supabase: SupabaseService = app._supabase if hasattr(app, '_supabase') else None
         
         # Log DM conversation
+        conversation = None
         if supabase:
-            conversation_data = {
-                "slack_channel_id": event.get("channel"),
-                "user_id": user,
-                "context_type": "private",
-                "status": "active"
-            }
-            # TODO: Create conversation and message records
+            try:
+                conversation = supabase.get_or_create_conversation(
+                    channel_id=event.get("channel"),
+                    user_id=user,
+                    context_type="private",
+                    thread_ts=event.get("thread_ts")
+                )
+                
+                # Log the user's message
+                supabase.log_message({
+                    "conversation_id": conversation["id"],
+                    "sender_type": "user",
+                    "sender_id": user,
+                    "content": text,
+                    "slack_message_ts": event.get("ts"),
+                    "metadata": {"event_type": "direct_message"}
+                })
+                
+                # Log activity
+                supabase.log_activity({
+                    "slack_user_id": user,
+                    "activity_type": "direct_message",
+                    "entity_type": "conversation",
+                    "entity_id": conversation["id"],
+                    "metadata": {"message_length": len(text)}
+                })
+            except Exception as e:
+                logger.error(f"Error logging DM conversation: {e}")
         
         # Natural language processing for DMs
         text_lower = text.lower()

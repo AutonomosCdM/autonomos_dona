@@ -149,6 +149,150 @@ class SupabaseService:
             logger.error(f"Error updating task: {e}", exc_info=True)
             raise
     
+    # Conversation and message operations
+    def create_conversation(self, conversation_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new conversation record.
+        
+        Args:
+            conversation_data: Conversation information
+            
+        Returns:
+            Created conversation data
+        """
+        try:
+            # Get user ID from slack_user_id
+            user = self.get_or_create_user(
+                conversation_data["user_id"],
+                conversation_data.get("slack_workspace_id", settings.SLACK_WORKSPACE_ID)
+            )
+            
+            conversation = {
+                "slack_channel_id": conversation_data["slack_channel_id"],
+                "slack_thread_ts": conversation_data.get("slack_thread_ts"),
+                "user_id": user["id"],
+                "context_type": conversation_data["context_type"],
+                "status": conversation_data.get("status", "active"),
+                "created_at": datetime.utcnow().isoformat()
+            }
+            
+            result = self.client.table("conversations").insert(conversation).execute()
+            logger.info(f"Created conversation in channel {conversation_data['slack_channel_id']}")
+            return result.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error creating conversation: {e}", exc_info=True)
+            raise
+    
+    def get_or_create_conversation(self, channel_id: str, user_id: str, 
+                                   context_type: str, thread_ts: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get existing conversation or create new one.
+        
+        Args:
+            channel_id: Slack channel ID
+            user_id: Slack user ID
+            context_type: 'public' or 'private'
+            thread_ts: Optional thread timestamp
+            
+        Returns:
+            Conversation data
+        """
+        try:
+            # Get database user
+            user = self.get_or_create_user(user_id, settings.SLACK_WORKSPACE_ID)
+            
+            # Look for existing active conversation
+            query = self.client.table("conversations").select("*").eq(
+                "slack_channel_id", channel_id
+            ).eq("user_id", user["id"]).eq("status", "active")
+            
+            if thread_ts:
+                query = query.eq("slack_thread_ts", thread_ts)
+            
+            result = query.execute()
+            
+            if result.data:
+                return result.data[0]
+            
+            # Create new conversation
+            return self.create_conversation({
+                "slack_channel_id": channel_id,
+                "slack_thread_ts": thread_ts,
+                "user_id": user_id,
+                "context_type": context_type
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in get_or_create_conversation: {e}", exc_info=True)
+            raise
+    
+    def log_message(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Log a message in a conversation.
+        
+        Args:
+            message_data: Message information including conversation_id, content, etc.
+            
+        Returns:
+            Created message data
+        """
+        try:
+            message = {
+                "conversation_id": message_data["conversation_id"],
+                "sender_type": message_data["sender_type"],
+                "sender_id": message_data["sender_id"],
+                "content": message_data["content"],
+                "slack_message_ts": message_data.get("slack_message_ts"),
+                "intent_detected": message_data.get("intent_detected"),
+                "metadata": message_data.get("metadata", {}),
+                "created_at": datetime.utcnow().isoformat()
+            }
+            
+            result = self.client.table("messages").insert(message).execute()
+            logger.debug(f"Logged {message_data['sender_type']} message in conversation {message_data['conversation_id']}")
+            return result.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error logging message: {e}", exc_info=True)
+            raise
+    
+    def log_activity(self, activity_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Log an activity for analytics.
+        
+        Args:
+            activity_data: Activity information
+            
+        Returns:
+            Created activity log data
+        """
+        try:
+            # Get user ID if slack_user_id is provided
+            user_id = activity_data.get("user_id")
+            if activity_data.get("slack_user_id") and not user_id:
+                user = self.get_or_create_user(
+                    activity_data["slack_user_id"],
+                    settings.SLACK_WORKSPACE_ID
+                )
+                user_id = user["id"]
+            
+            activity = {
+                "user_id": user_id,
+                "activity_type": activity_data["activity_type"],
+                "entity_type": activity_data.get("entity_type"),
+                "entity_id": activity_data.get("entity_id"),
+                "metadata": activity_data.get("metadata", {}),
+                "created_at": datetime.utcnow().isoformat()
+            }
+            
+            result = self.client.table("activity_logs").insert(activity).execute()
+            return result.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error logging activity: {e}", exc_info=True)
+            raise
+    
     # Time tracking operations
     def start_time_entry(self, user_id: int, task_id: Optional[int] = None) -> Dict[str, Any]:
         """

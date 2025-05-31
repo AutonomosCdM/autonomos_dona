@@ -71,13 +71,36 @@ def handle_dona_command(ack: Ack, respond: Respond, command: Dict[str, Any], con
     
     try:
         # Store the conversation
-        conversation_data = {
-            "user_id": user_id,
-            "channel_id": channel_id,
-            "context_type": context_type.value,
-            "command_text": text,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        conversation = None
+        if supabase:
+            try:
+                conversation = supabase.get_or_create_conversation(
+                    channel_id=channel_id,
+                    user_id=user_id,
+                    context_type=context_type.value,
+                    thread_ts=command.get("thread_ts")
+                )
+                
+                # Log the command
+                supabase.log_message({
+                    "conversation_id": conversation["id"],
+                    "sender_type": "user",
+                    "sender_id": user_id,
+                    "content": f"/dona {text}",
+                    "slack_message_ts": command.get("ts"),
+                    "metadata": {"command": "/dona", "args": text}
+                })
+                
+                # Log activity
+                supabase.log_activity({
+                    "slack_user_id": user_id,
+                    "activity_type": "slash_command",
+                    "entity_type": "command",
+                    "entity_id": None,
+                    "metadata": {"command": "/dona", "context": context_type.value}
+                })
+            except Exception as e:
+                logger.error(f"Error logging command: {e}")
         
         # Process natural language commands
         if "help" in text.lower():

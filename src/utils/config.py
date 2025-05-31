@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     SLACK_APP_TOKEN: str = Field(..., description="Slack app-level token")
     SLACK_SIGNING_SECRET: str = Field(..., description="Slack signing secret")
     SLACK_BOT_USER_ID: Optional[str] = Field(None, description="Bot user ID (auto-detected)")
+    SLACK_WORKSPACE_ID: str = Field("T000000", description="Slack workspace ID")
     
     # Supabase Configuration
     SUPABASE_URL: str = Field(..., description="Supabase project URL")
