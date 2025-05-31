@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     # Application Configuration
     LOG_LEVEL: str = Field("INFO", description="Logging level")
     DEBUG: bool = Field(False, description="Debug mode")
+    ENV: str = Field("development", description="Environment (development, test, production)")
+    ADMIN_USERS: str = Field("", description="Comma-separated list of admin user IDs")
+    
+    # Rate Limiting Configuration
+    RATE_LIMIT_ENABLED: bool = Field(True, description="Enable rate limiting")
+    RATE_LIMIT_USER_MAX: int = Field(60, description="Max requests per user per minute")
+    RATE_LIMIT_USER_BURST: int = Field(10, description="Max burst size for user requests")
+    RATE_LIMIT_CLEANUP_INTERVAL: int = Field(3600, description="Cleanup interval in seconds")
     
     # Database Tables (for reference)
     DB_TABLE_USERS: str = Field("users", description="Users table name")

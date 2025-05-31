@@ -192,9 +192,15 @@ class SlackService:
             })
         
         if task.get("created_at"):
+            # Handle both datetime objects and ISO strings
+            created_at = task['created_at']
+            if isinstance(created_at, str):
+                from datetime import datetime as dt
+                created_at = dt.fromisoformat(created_at.replace('Z', '+00:00'))
+            
             fields.append({
                 "type": "mrkdwn",
-                "text": f"*Created:* <!date^{int(task['created_at'].timestamp())}^{{date_short_pretty}}|{task['created_at'].strftime('%Y-%m-%d')}>"
+                "text": f"*Created:* <!date^{int(created_at.timestamp())}^{{date_short_pretty}}|{created_at.strftime('%Y-%m-%d')}>"
             })
         
         if fields:

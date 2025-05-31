@@ -15,6 +15,8 @@ from slack_sdk.web import SlackResponse
 from src.models.schemas import Task, TaskStatus, ConversationContext
 from src.services.supabase_client import SupabaseService
 from src.utils.config import settings
+from src.utils.metrics import metrics_collector
+from src.middleware.rate_limit_middleware import get_rate_limit_status
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,8 @@ def register_command_handlers(app: App) -> None:
     app.command("/dona-remind")(handle_remind_command)
     app.command("/dona-summary")(handle_summary_command)
     app.command("/dona-status")(handle_status_command)
+    app.command("/dona-metrics")(handle_metrics_command)
+    app.command("/dona-limits")(handle_limits_command)
     
     logger.info("Command handlers registered")
 
@@ -327,3 +331,98 @@ def handle_status_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -
     except Exception as e:
         logger.error(f"Error handling status command: {e}", exc_info=True)
         respond("An error occurred while fetching your status. Please try again.")
+
+
+def handle_metrics_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -> None:
+    """
+    Handle the /dona-metrics command to display system metrics.
+    
+    Only available to admin users or in development mode.
+    """
+    ack()
+    
+    user_id = command.get("user_id")
+    
+    try:
+        # Check if user is admin (in production, verify against admin list)
+        if settings.ENV != "development":
+            # In production, check admin list
+            admin_users = settings.ADMIN_USERS.split(",") if hasattr(settings, "ADMIN_USERS") else []
+            if user_id not in admin_users:
+                respond("This command is only available to administrators.")
+                return
+        
+        # Get metrics summary
+        summary = metrics_collector.get_summary()
+        
+        # Format metrics for display
+        lines = ["*System Metrics*\n"]
+        lines.append(f"_Window: Last {summary['window_minutes']} minutes_\n")
+        
+        # Overall stats
+        total_requests = sum(stats['count'] for stats in summary['request_types'].values())
+        total_errors = summary['counters'].get('errors', 0)
+        error_rate = (total_errors / total_requests * 100) if total_requests > 0 else 0
+        
+        lines.append("*Overall Statistics:*")
+        lines.append(f"• Total Requests: {total_requests}")
+        lines.append(f"• Total Errors: {total_errors} ({error_rate:.1f}%)")
+        lines.append(f"• Slow Requests: {summary['counters'].get('slow_requests', 0)}")
+        lines.append("")
+        
+        # Per request type stats
+        if summary['request_types']:
+            lines.append("*Request Type Breakdown:*")
+            
+            for request_type, stats in sorted(summary['request_types'].items()):
+                lines.append(f"\n_{request_type}_")
+                lines.append(f"• Count: {stats['count']}")
+                lines.append(f"• Success: {stats['success_count']} | Errors: {stats['error_count']}")
+                lines.append(f"• Avg Duration: {stats['avg_duration_ms']:.0f}ms")
+                lines.append(f"• P95 Duration: {stats['p95_duration_ms']:.0f}ms")
+                lines.append(f"• Max Duration: {stats['max_duration_ms']:.0f}ms")
+        
+        # User-specific stats
+        if command.get("text") == "me":
+            user_stats = metrics_collector.get_user_stats(user_id)
+            if user_stats['total_requests'] > 0:
+                lines.append(f"\n*Your Statistics:*")
+                lines.append(f"• Total Requests: {user_stats['total_requests']}")
+                for req_type, type_stats in user_stats['request_types'].items():
+                    lines.append(f"• {req_type}: {type_stats['count']} (avg {type_stats['avg_duration_ms']:.0f}ms)")
+        
+        metrics_text = "\n".join(lines)
+        respond(metrics_text)
+        
+        logger.info(f"Metrics command executed by user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error handling metrics command: {e}", exc_info=True)
+        respond("An error occurred while fetching metrics. Please try again.")
+
+
+def handle_limits_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -> None:
+    """
+    Handle the /dona-limits command to check rate limit status.
+    
+    Shows current rate limit usage for the user.
+    """
+    ack()
+    
+    user_id = command.get("user_id")
+    
+    try:
+        # Check if rate limiting is enabled
+        if not settings.RATE_LIMIT_ENABLED:
+            respond("Rate limiting is currently disabled.")
+            return
+        
+        # Get rate limit status
+        status = get_rate_limit_status(user_id)
+        respond(status)
+        
+        logger.info(f"Limits command executed by user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error handling limits command: {e}", exc_info=True)
+        respond("An error occurred while checking rate limits. Please try again.")

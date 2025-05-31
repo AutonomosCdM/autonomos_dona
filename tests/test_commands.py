@@ -165,7 +165,8 @@ class TestCommandHandlers:
             "/dona-task",
             "/dona-remind",
             "/dona-summary",
-            "/dona-status"
+            "/dona-status",
+            "/dona-metrics"
         ]
         
         assert app.command.call_count == len(expected_commands)
