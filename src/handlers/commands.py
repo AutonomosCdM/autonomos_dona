@@ -14,9 +14,11 @@ from slack_sdk.web import SlackResponse
 
 from src.models.schemas import Task, TaskStatus, ConversationContext
 from src.services.supabase_client import SupabaseService
+from src.services.slack_client import get_slack_service
 from src.utils.config import settings
 from src.utils.metrics import metrics_collector
 from src.middleware.rate_limit_middleware import get_rate_limit_status
+from src.utils.context_manager import ContextType
 
 logger = logging.getLogger(__name__)
 
@@ -51,21 +53,28 @@ def handle_dona_command(ack: Ack, respond: Respond, command: Dict[str, Any], con
     
     text = command.get("text", "").strip()
     user_id = command.get("user_id")
-    is_private = context.get("is_private", False)
+    channel_id = command.get("channel_id")
+    
+    # Get services
+    slack_service = get_slack_service()
+    supabase: SupabaseService = context.get("app")._supabase
+    
+    # Determine context type
+    context_type = slack_service.context_manager.get_context_type(channel_id, user_id)
     
     if not text:
-        respond("Hi! I'm Dona, your executive assistant. How can I help you today? Type `/dona help` for available commands.")
+        if context_type == ContextType.PRIVATE:
+            respond("¡Hola! Soy Dona, tu asistente personal. ¿Cómo puedo ayudarte hoy? Escribe `/dona help` para ver comandos disponibles.")
+        else:
+            respond("¡Hola! Soy Dona, asistente del equipo. ¿En qué puedo ayudar? Escribe `/dona help` para ver comandos disponibles.")
         return
-    
-    # Log the interaction
-    supabase: SupabaseService = context.get("app")._supabase
     
     try:
         # Store the conversation
         conversation_data = {
             "user_id": user_id,
-            "channel_id": command.get("channel_id"),
-            "is_private": is_private,
+            "channel_id": channel_id,
+            "context_type": context_type.value,
             "command_text": text,
             "timestamp": datetime.utcnow().isoformat()
         }
@@ -93,28 +102,54 @@ def handle_help_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -> 
     """
     ack()  # Acknowledge the command
     
-    help_text = """
-    :wave: *¡Hola! Soy Dona, tu asistente ejecutiva.*
+    # Determine context
+    slack_service = get_slack_service()
+    channel_id = command.get("channel_id")
+    user_id = command.get("user_id")
+    context_type = slack_service.context_manager.get_context_type(channel_id, user_id)
     
-    *Comandos principales:*
-    • `/dona [texto]` - Habla conmigo en lenguaje natural
-    • `/dona-help` - Muestra este mensaje de ayuda
-    • `/dona-task [create|list|complete]` - Gestiona tareas
-    • `/dona-remind [cuando] [mensaje]` - Configura recordatorios
-    • `/dona-summary [today|week]` - Resumen de actividades
-    • `/dona-status` - Tu estado actual y estadísticas
-    
-    *Ejemplos:*
-    • `/dona necesito agendar una reunión con el equipo`
-    • `/dona-task create Revisar propuesta de marketing`
-    • `/dona-remind mañana 10am Llamar a cliente`
-    • `/dona-summary today`
-    
-    💡 *Tip:* Puedes hablarme en modo privado (DM) para asuntos confidenciales.
-    """
+    if context_type == ContextType.PRIVATE:
+        help_text = """
+:wave: *¡Hola! Soy Dona, tu asistente ejecutiva personal.*
+
+*Comandos disponibles en este espacio privado:*
+• `/dona [texto]` - Habla conmigo en lenguaje natural
+• `/dona-help` - Muestra este mensaje de ayuda
+• `/dona-task [create|list|complete]` - Gestiona tareas personales
+• `/dona-remind [cuando] [mensaje]` - Configura recordatorios privados
+• `/dona-summary [today|week]` - Tu resumen personal de actividades
+• `/dona-status` - Tu estado actual y estadísticas personales
+• `/dona-config` - Configura tus preferencias personales
+
+*Ejemplos:*
+• `/dona necesito preparar la presentación para el board`
+• `/dona-task create Revisar contratos confidenciales`
+• `/dona-remind mañana 10am Llamada privada con inversionista`
+
+🔒 *Privacidad:* Todo lo que compartas aquí es completamente confidencial.
+        """
+    else:
+        help_text = """
+:wave: *¡Hola! Soy Dona, asistente ejecutiva del equipo.*
+
+*Comandos disponibles:*
+• `/dona [texto]` - Habla conmigo en lenguaje natural
+• `/dona-help` - Muestra este mensaje de ayuda
+• `/dona-task [create|list|complete]` - Gestiona tareas del equipo
+• `/dona-remind [cuando] [mensaje]` - Configura recordatorios
+• `/dona-summary [today|week]` - Resumen de actividades del equipo
+• `/dona-status` - Estado del equipo
+
+*Ejemplos:*
+• `/dona necesito agendar reunión de equipo`
+• `/dona-task create Revisar propuesta de marketing`
+• `/dona-remind mañana 10am Stand-up diario`
+
+💡 *Tip:* Para asuntos privados o confidenciales, háblame por mensaje directo.
+        """
     
     respond(help_text)
-    logger.info(f"Help command executed by user {command.get('user_id')}")
+    logger.info(f"Help command executed by user {user_id} in {context_type.value} context")
 
 
 def handle_task_command(ack: Ack, respond: Respond, command: Dict[str, Any]) -> None:

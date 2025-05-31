@@ -14,8 +14,9 @@ from slack_sdk.web import SlackResponse
 
 from src.models.schemas import ConversationContext
 from src.services.supabase_client import SupabaseService
-from src.services.slack_client import SlackService
+from src.services.slack_client import SlackService, get_slack_service
 from src.utils.config import settings
+from src.utils.context_manager import ContextType
 
 logger = logging.getLogger(__name__)
 
@@ -47,18 +48,22 @@ def handle_app_mention(event: Dict[str, Any], say: Any, context: BoltContext) ->
         user = event.get("user")
         text = event.get("text", "")
         channel = event.get("channel")
-        is_private = context.get("is_private", False)
         
-        # Get Supabase service
+        # Get services
+        slack_service = get_slack_service()
         app = context.get("app") or context.get("client")
         supabase: SupabaseService = app._supabase if hasattr(app, '_supabase') else None
+        
+        # Determine context type
+        context_type = slack_service.context_manager.get_context_type(channel, user)
+        privacy_level = slack_service.context_manager.get_privacy_level(context_type)
         
         # Log the conversation
         if supabase:
             conversation_data = {
                 "slack_channel_id": channel,
                 "user_id": user,
-                "context_type": "private" if is_private else "public",
+                "context_type": context_type.value,
                 "status": "active"
             }
             # TODO: Create conversation record
@@ -69,14 +74,29 @@ def handle_app_mention(event: Dict[str, Any], say: Any, context: BoltContext) ->
         
         # Process natural language
         if any(word in clean_text.lower() for word in ["help", "ayuda", "como"]):
-            say(
-                f"¡Hola <@{user}>! :wave:\n"
-                "Soy Dona, tu asistente ejecutiva. Puedo ayudarte con:\n"
-                "• `/dona` - Habla conmigo en lenguaje natural\n"
-                "• `/dona-task create [descripción]` - Crear tareas\n"
-                "• `/dona-remind [cuándo] [mensaje]` - Configurar recordatorios\n"
-                "• `/dona-summary` - Ver resumen de actividades"
-            )
+            # Customize response based on context
+            if context_type == ContextType.PRIVATE:
+                help_message = (
+                    f"¡Hola <@{user}>! :wave:\n"
+                    "Soy Dona, tu asistente ejecutiva personal. En este espacio privado puedo ayudarte con:\n"
+                    "• `/dona` - Habla conmigo en lenguaje natural\n"
+                    "• `/dona-task create [descripción]` - Crear tareas personales\n"
+                    "• `/dona-remind [cuándo] [mensaje]` - Configurar recordatorios privados\n"
+                    "• `/dona-summary` - Ver tu resumen personal\n"
+                    "• `/dona-config` - Configurar preferencias personales\n\n"
+                    "_💡 Todo lo que compartas aquí es confidencial._"
+                )
+            else:
+                help_message = (
+                    f"¡Hola <@{user}>! :wave:\n"
+                    "Soy Dona, asistente ejecutiva del equipo. Puedo ayudar con:\n"
+                    "• `/dona` - Habla conmigo en lenguaje natural\n"
+                    "• `/dona-task create [descripción]` - Crear tareas del equipo\n"
+                    "• `/dona-remind [cuándo] [mensaje]` - Configurar recordatorios\n"
+                    "• `/dona-summary` - Ver resumen de actividades\n\n"
+                    "_Para asuntos privados, háblame por mensaje directo._"
+                )
+            say(help_message)
         elif any(word in clean_text.lower() for word in ["task", "tarea", "hacer"]):
             say(
                 f"<@{user}>, para crear una tarea usa:\n"

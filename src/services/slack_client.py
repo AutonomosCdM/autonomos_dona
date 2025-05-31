@@ -12,6 +12,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 from src.utils.config import settings
+from src.utils.context_manager import ContextManager, ContextType
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class SlackService:
     def __init__(self):
         """Initialize the Slack Web API client."""
         self.client = WebClient(token=settings.SLACK_BOT_TOKEN)
+        self.context_manager = ContextManager(self.client)
         logger.info("Slack service initialized")
     
     def get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
