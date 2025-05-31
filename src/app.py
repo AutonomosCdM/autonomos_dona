@@ -39,8 +39,9 @@ logger = setup_logging()
 def add_context_middleware(args, next):
     """Middleware to add context information to requests."""
     # Determine if the interaction is public or private
-    event = args.get("event", {})
-    command = args.get("command", {})
+    event = getattr(args, 'event', None)
+    command = getattr(args, 'command', None)
+    context = getattr(args, 'context', {})
     
     # For DMs, channel_type is 'im'
     is_private = False
@@ -55,8 +56,8 @@ def add_context_middleware(args, next):
         user_id = command.get("user_id")
     
     # Add context to args
-    args["context"]["is_private"] = is_private
-    args["context"]["user_id"] = user_id
+    context["is_private"] = is_private
+    context["user_id"] = user_id
     
     logger.debug(f"Context: private={is_private}, user={user_id}")
     next()

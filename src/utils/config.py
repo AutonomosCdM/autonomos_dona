@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     RATE_LIMIT_USER_BURST: int = Field(10, description="Max burst size for user requests")
     RATE_LIMIT_CLEANUP_INTERVAL: int = Field(3600, description="Cleanup interval in seconds")
     
+    # Pipedream MCP Configuration
+    PIPEDREAM_MCP_URL: str = Field(
+        default="https://mcp.pipedream.net/150efeed-bac9-41a2-af63-fa19dd973ba6/slack",
+        description="Pipedream MCP server URL for Slack integration"
+    )
+    
+    # LLM Configuration
+    GROQ_API_KEY: str = Field(..., description="Groq API key for LLM integration")
+    GROQ_MODEL: str = Field("llama-3.1-8b-instant", description="Groq model to use")
+    
     # Database Tables (for reference)
     DB_TABLE_USERS: str = Field("users", description="Users table name")
     DB_TABLE_TASKS: str = Field("tasks", description="Tasks table name")
@@ -63,7 +73,8 @@ class Settings(BaseSettings):
             "SLACK_APP_TOKEN",
             "SLACK_SIGNING_SECRET",
             "SUPABASE_URL",
-            "SUPABASE_KEY"
+            "SUPABASE_KEY",
+            "GROQ_API_KEY"
         ]
         
         missing_fields = []
@@ -94,3 +105,8 @@ SLACK_APP_TOKEN = settings.SLACK_APP_TOKEN
 SLACK_SIGNING_SECRET = settings.SLACK_SIGNING_SECRET
 SUPABASE_URL = settings.SUPABASE_URL
 SUPABASE_KEY = settings.SUPABASE_KEY
+
+
+def get_config() -> Settings:
+    """Get configuration instance."""
+    return settings

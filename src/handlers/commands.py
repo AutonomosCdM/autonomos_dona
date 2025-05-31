@@ -15,6 +15,7 @@ from slack_sdk.web import SlackResponse
 from src.models.schemas import Task, TaskStatus, ConversationContext
 from src.services.supabase_client import SupabaseService, get_supabase_service
 from src.services.slack_client import get_slack_service
+from src.services.llm_service import get_llm_service
 from src.utils.config import settings
 from src.utils.metrics import metrics_collector
 from src.middleware.rate_limit_middleware import get_rate_limit_status
@@ -103,10 +104,65 @@ def handle_dona_command(ack: Ack, respond: Respond, command: Dict[str, Any], con
             except Exception as e:
                 logger.error(f"Error logging command: {e}")
         
-        # Process natural language commands
-        if "help" in text.lower():
-            # Call help handler without ack since it's already been called
-            help_response = """
+        # Use LLM for natural language processing
+        try:
+            llm_service = get_llm_service()
+            
+            # Get conversation history for context
+            conversation_history = []
+            if conversation and supabase:
+                try:
+                    messages = supabase.get_conversation_messages(conversation["id"], limit=5)
+                    for msg in messages[-4:]:  # Last 4 messages for context
+                        role = "assistant" if msg.get("sender_type") == "bot" else "user"
+                        conversation_history.append({
+                            "role": role,
+                            "content": msg.get("content", "")
+                        })
+                except Exception as e:
+                    logger.warning(f"Could not get conversation history: {e}")
+            
+            # Extract intent to see if we should suggest specific commands
+            intent_data = llm_service.extract_intent(text)
+            
+            # Generate intelligent response
+            user_context = {
+                "user_id": user_id,
+                "channel_id": channel_id,
+                "context_type": context_type.value,
+                "intent": intent_data
+            }
+            
+            llm_response = llm_service.generate_response(
+                user_message=text,
+                conversation_context=conversation_history,
+                user_context=user_context
+            )
+            
+            # Log the LLM interaction
+            if supabase and conversation:
+                try:
+                    supabase.log_message({
+                        "conversation_id": conversation["id"],
+                        "sender_type": "bot",
+                        "sender_id": "dona",
+                        "content": llm_response,
+                        "metadata": {
+                            "intent": intent_data,
+                            "llm_model": settings.GROQ_MODEL,
+                            "processing_type": "llm"
+                        }
+                    })
+                except Exception as e:
+                    logger.error(f"Error logging LLM response: {e}")
+            
+            respond(llm_response)
+            
+        except Exception as e:
+            logger.error(f"Error processing with LLM: {e}")
+            # Fallback to simple rule-based responses
+            if "help" in text.lower():
+                help_response = """
 :wave: *¡Hola! Soy Dona, tu asistente ejecutiva.*
 
 *Comandos disponibles:*
@@ -120,13 +176,13 @@ def handle_dona_command(ack: Ack, respond: Respond, command: Dict[str, Any], con
 
 ¡Estoy aquí para ayudarte! :robot_face:
 """
-            respond(help_response)
-        elif any(word in text.lower() for word in ["task", "tarea", "hacer"]):
-            respond("I understand you want to create a task. Use `/dona-task create [description]` or I can help you organize it.")
-        elif any(word in text.lower() for word in ["remind", "recordar", "recordatorio"]):
-            respond("I'll help you set a reminder. Use `/dona-remind [time] [message]` or tell me what you need to remember.")
-        else:
-            respond(f"I heard: '{text}'. I'm still learning to understand natural language better. Try `/dona help` for available commands.")
+                respond(help_response)
+            elif any(word in text.lower() for word in ["task", "tarea", "hacer"]):
+                respond("Entiendo que quieres gestionar tareas. Usa `/dona-task create [descripción]` para crear una nueva tarea.")
+            elif any(word in text.lower() for word in ["remind", "recordar", "recordatorio"]):
+                respond("Para configurar un recordatorio, usa `/dona-remind [cuándo] [mensaje]`.")
+            else:
+                respond(f"Escuché: '{text}'. Estoy aprendiendo a entender mejor el lenguaje natural. Prueba `/dona help` para ver comandos disponibles.")
             
     except Exception as e:
         logger.error(f"Error in main dona command: {e}", exc_info=True)

@@ -624,6 +624,29 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Error fetching time entries: {e}", exc_info=True)
             raise
+    
+    def get_conversation_messages(self, conversation_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get messages from a conversation.
+        
+        Args:
+            conversation_id: The conversation ID
+            limit: Maximum number of messages to return
+            
+        Returns:
+            List of messages
+        """
+        try:
+            result = self.client.table("messages").select("*").eq(
+                "conversation_id", conversation_id
+            ).order("created_at", desc=True).limit(limit).execute()
+            
+            # Return in chronological order (oldest first)
+            return list(reversed(result.data)) if result.data else []
+            
+        except Exception as e:
+            logger.error(f"Error fetching conversation messages: {e}", exc_info=True)
+            return []  # Return empty list instead of raising to prevent crashes
 
 
 # Singleton instance

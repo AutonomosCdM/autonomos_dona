@@ -16,7 +16,7 @@ from src.utils.metrics import metrics_collector
 logger = logging.getLogger(__name__)
 
 
-def rate_limit_middleware(args: Dict[str, Any], next: Callable) -> None:
+def rate_limit_middleware(args, next: Callable) -> None:
     """
     Middleware to enforce rate limits on commands.
     
@@ -24,7 +24,7 @@ def rate_limit_middleware(args: Dict[str, Any], next: Callable) -> None:
     Responds with appropriate error messages when limits are exceeded.
     """
     # Only apply to commands
-    command = args.get("command")
+    command = getattr(args, "command", None)
     if not command:
         next()
         return
@@ -51,11 +51,11 @@ def rate_limit_middleware(args: Dict[str, Any], next: Callable) -> None:
         _handle_rate_limit_exceeded(args, limit_info)
 
 
-def _handle_rate_limit_exceeded(args: Dict[str, Any], limit_info: Dict[str, Any]) -> None:
+def _handle_rate_limit_exceeded(args, limit_info: Dict[str, Any]) -> None:
     """Handle rate limit exceeded scenario."""
-    ack: Ack = args.get("ack")
-    respond: Respond = args.get("respond")
-    command = args.get("command", {})
+    ack: Ack = getattr(args, "ack", None)
+    respond: Respond = getattr(args, "respond", None)
+    command = getattr(args, "command", {})
     
     # Acknowledge immediately
     if ack:

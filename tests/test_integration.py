@@ -109,7 +109,8 @@ class TestBotIntegration:
             'user_id': user_id,
             'user_name': 'testuser',
             'channel_id': 'C123456',
-            'channel_name': 'general'
+            'channel_name': 'general',
+            'app': app  # Add app to command
         }
         
         # Mock task creation
@@ -122,11 +123,11 @@ class TestBotIntegration:
         }
         
         with patch.object(app._supabase, 'create_task', return_value=created_task):
-            handle_task_command(ack, command, respond, app.client, app._supabase)
+            handle_task_command(ack, respond, command)
         
         ack.assert_called_once()
         respond.assert_called_once()
-        assert "Task created" in str(respond.call_args)
+        assert "Tarea creada" in str(respond.call_args)
         
         # Step 2: List tasks
         ack.reset_mock()
@@ -135,12 +136,14 @@ class TestBotIntegration:
         command['text'] = 'list'
         
         tasks = [created_task]
-        with patch.object(app._supabase, 'get_user_tasks', return_value=tasks):
-            handle_task_command(ack, command, respond, app.client, app._supabase)
+        with patch.object(app._supabase, 'get_user_tasks', return_value=tasks), \
+             patch('src.handlers.commands.get_slack_service') as mock_slack_service:
+            mock_slack_service.return_value.format_task_list.return_value = "Mocked task list"
+            handle_task_command(ack, respond, command)
         
         ack.assert_called_once()
         respond.assert_called_once()
-        assert "Review Q4 reports" in str(respond.call_args)
+        assert "Mocked task list" in str(respond.call_args)
         
         # Step 3: Complete the task
         ack.reset_mock()
@@ -148,8 +151,9 @@ class TestBotIntegration:
         
         command['text'] = 'complete task-123'
         
-        with patch.object(app._supabase, 'update_task', return_value=True):
-            handle_task_command(ack, command, respond, app.client, app._supabase)
+        updated_task = {'id': 'task-123', 'description': 'Review Q4 reports', 'status': 'completed'}
+        with patch.object(app._supabase, 'update_task', return_value=updated_task):
+            handle_task_command(ack, respond, command)
         
         ack.assert_called_once()
         respond.assert_called_once()
@@ -170,7 +174,7 @@ class TestBotIntegration:
         
         # Import and test remind command
         from src.handlers.commands import handle_remind_command
-        handle_remind_command(ack, command, respond, app.client)
+        handle_remind_command(ack, respond, command)
         
         ack.assert_called_once()
         respond.assert_called_once()

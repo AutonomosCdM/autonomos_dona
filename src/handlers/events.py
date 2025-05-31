@@ -15,6 +15,7 @@ from slack_sdk.web import SlackResponse
 from src.models.schemas import ConversationContext
 from src.services.supabase_client import SupabaseService
 from src.services.slack_client import SlackService, get_slack_service
+from src.services.llm_service import get_llm_service
 from src.utils.config import settings
 from src.utils.context_manager import ContextType
 
@@ -94,57 +95,57 @@ def handle_app_mention(event: Dict[str, Any], say: Any, context: BoltContext) ->
         bot_mention = f"<@{context.get('bot_user_id')}>"
         clean_text = text.replace(bot_mention, "").strip()
         
-        # Process natural language
+        # Use LLM for intelligent processing
         response_message = None
         intent_detected = None
         
-        if any(word in clean_text.lower() for word in ["help", "ayuda", "como"]):
-            intent_detected = "help_request"
-            # Customize response based on context
-            if context_type == ContextType.PRIVATE:
-                response_message = (
-                    f"¡Hola <@{user}>! :wave:\n"
-                    "Soy Dona, tu asistente ejecutiva personal. En este espacio privado puedo ayudarte con:\n"
-                    "• `/dona` - Habla conmigo en lenguaje natural\n"
-                    "• `/dona-task create [descripción]` - Crear tareas personales\n"
-                    "• `/dona-remind [cuándo] [mensaje]` - Configurar recordatorios privados\n"
-                    "• `/dona-summary` - Ver tu resumen personal\n"
-                    "• `/dona-config` - Configurar preferencias personales\n\n"
-                    "_💡 Todo lo que compartas aquí es confidencial._"
-                )
-            else:
-                response_message = (
-                    f"¡Hola <@{user}>! :wave:\n"
-                    "Soy Dona, asistente ejecutiva del equipo. Puedo ayudar con:\n"
-                    "• `/dona` - Habla conmigo en lenguaje natural\n"
-                    "• `/dona-task create [descripción]` - Crear tareas del equipo\n"
-                    "• `/dona-remind [cuándo] [mensaje]` - Configurar recordatorios\n"
-                    "• `/dona-summary` - Ver resumen de actividades\n\n"
-                    "_Para asuntos privados, háblame por mensaje directo._"
-                )
-            say(response_message)
-        elif any(word in clean_text.lower() for word in ["task", "tarea", "hacer"]):
-            intent_detected = "task_request"
-            response_message = (
-                f"<@{user}>, para crear una tarea usa:\n"
-                "`/dona-task create [descripción]`\n\n"
-                "O simplemente dime qué necesitas hacer con `/dona necesito...`"
+        try:
+            llm_service = get_llm_service()
+            
+            # Get conversation history for context
+            conversation_history = []
+            if conversation and supabase:
+                try:
+                    messages = supabase.get_conversation_messages(conversation["id"], limit=5)
+                    for msg in messages[-4:]:  # Last 4 messages for context
+                        role = "assistant" if msg.get("sender_type") == "bot" else "user"
+                        conversation_history.append({
+                            "role": role,
+                            "content": msg.get("content", "")
+                        })
+                except Exception as e:
+                    logger.warning(f"Could not get conversation history: {e}")
+            
+            # Extract intent
+            intent_data = llm_service.extract_intent(clean_text)
+            intent_detected = intent_data.get("intent", "unknown")
+            
+            # Generate intelligent response with context awareness
+            user_context = {
+                "user_id": user,
+                "channel_id": channel,
+                "context_type": context_type.value,
+                "intent": intent_data,
+                "is_mention": True
+            }
+            
+            llm_response = llm_service.generate_response(
+                user_message=clean_text,
+                conversation_context=conversation_history,
+                user_context=user_context
             )
+            
+            # Add user mention to response
+            response_message = f"<@{user}>, {llm_response}"
             say(response_message)
-        elif any(word in clean_text.lower() for word in ["meeting", "reunión", "agendar"]):
-            intent_detected = "meeting_request"
-            response_message = (
-                f"<@{user}>, pronto podré ayudarte a agendar reuniones. "
-                "Por ahora, puedo crear recordatorios con:\n"
-                "`/dona-remind [cuándo] [mensaje]`"
-            )
-            say(response_message)
-        else:
-            intent_detected = "unknown"
+            
+        except Exception as e:
+            logger.error(f"Error processing mention with LLM: {e}")
+            # Fallback to simple response
+            intent_detected = "fallback"
             response_message = (
                 f"<@{user}>, escuché: _{clean_text}_\n\n"
-                "Estoy aprendiendo a entender mejor el lenguaje natural. "
-                "Por ahora, usa `/dona` seguido de tu solicitud o `/dona-help` para ver comandos disponibles."
+                "Estoy procesando tu mensaje. Usa `/dona-help` para ver comandos disponibles."
             )
             say(response_message)
         
@@ -224,47 +225,70 @@ def handle_message(event: Dict[str, Any], say: Any, context: BoltContext) -> Non
             except Exception as e:
                 logger.error(f"Error logging DM conversation: {e}")
         
-        # Natural language processing for DMs
-        text_lower = text.lower()
-        
-        if any(greeting in text_lower for greeting in ["hola", "hello", "hi", "buenos días", "buenas tardes"]):
-            say(
-                f"¡Hola <@{user}>! :wave:\n\n"
-                "Soy Dona, tu asistente ejecutiva personal. ¿En qué puedo ayudarte hoy?\n\n"
-                "Puedes pedirme cosas como:\n"
-                "• _'Necesito crear una tarea para...'_\n"
-                "• _'Recuérdame mañana a las 10am...'_\n"
-                "• _'¿Cuáles son mis tareas pendientes?'_\n"
-                "• _'Muéstrame mi resumen del día'_"
+        # Use LLM for intelligent DM processing
+        try:
+            llm_service = get_llm_service()
+            
+            # Get conversation history for context
+            conversation_history = []
+            if conversation and supabase:
+                try:
+                    messages = supabase.get_conversation_messages(conversation["id"], limit=5)
+                    for msg in messages[-4:]:  # Last 4 messages for context
+                        role = "assistant" if msg.get("sender_type") == "bot" else "user"
+                        conversation_history.append({
+                            "role": role,
+                            "content": msg.get("content", "")
+                        })
+                except Exception as e:
+                    logger.warning(f"Could not get conversation history: {e}")
+            
+            # Extract intent
+            intent_data = llm_service.extract_intent(text)
+            
+            # Generate intelligent response for private context
+            user_context = {
+                "user_id": user,
+                "channel_id": event.get("channel"),
+                "context_type": "private",
+                "intent": intent_data,
+                "is_direct_message": True
+            }
+            
+            llm_response = llm_service.generate_response(
+                user_message=text,
+                conversation_context=conversation_history,
+                user_context=user_context
             )
-        elif any(word in text_lower for word in ["tarea", "task", "hacer", "necesito"]):
+            
+            say(llm_response)
+            
+            # Log the LLM interaction
+            if supabase and conversation:
+                try:
+                    supabase.log_message({
+                        "conversation_id": conversation["id"],
+                        "sender_type": "bot",
+                        "sender_id": "dona",
+                        "content": llm_response,
+                        "metadata": {
+                            "intent": intent_data,
+                            "llm_model": settings.GROQ_MODEL,
+                            "processing_type": "llm",
+                            "event_type": "direct_message_response"
+                        }
+                    })
+                except Exception as e:
+                    logger.error(f"Error logging LLM response: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error processing DM with LLM: {e}")
+            # Fallback to friendly response
             say(
-                "Entiendo que necesitas gestionar una tarea. Te ayudaré con eso.\n\n"
-                "Por ahora, usa: `/dona-task create [descripción]`\n\n"
-                "Pronto podré entender tus solicitudes de forma más natural. 🚀"
-            )
-        elif any(word in text_lower for word in ["recordar", "recordatorio", "remind", "avísame"]):
-            say(
-                "Claro, te ayudaré con el recordatorio.\n\n"
-                "Usa: `/dona-remind [cuándo] [mensaje]`\n\n"
-                "Ejemplo: `/dona-remind mañana 10am Llamar al cliente`"
-            )
-        elif any(word in text_lower for word in ["resumen", "summary", "status", "estado"]):
-            say(
-                "Para ver tu resumen de actividades, usa:\n\n"
-                "• `/dona-summary today` - Resumen de hoy\n"
-                "• `/dona-summary week` - Resumen semanal\n"
-                "• `/dona-status` - Tu estado actual"
-            )
-        else:
-            say(
-                "Recibí tu mensaje. Aunque todavía estoy aprendiendo a procesar lenguaje natural, "
-                "aquí están los comandos que puedes usar:\n\n"
-                "• `/dona [solicitud]` - Intenta entender tu pedido\n"
-                "• `/dona-help` - Ver todos los comandos\n"
-                "• `/dona-task` - Gestionar tareas\n"
-                "• `/dona-remind` - Crear recordatorios\n\n"
-                "_💡 Tip: En nuestras conversaciones privadas, puedes compartir información confidencial conmigo._"
+                "¡Hola! Recibí tu mensaje. Estoy procesando tu solicitud...\n\n"
+                "Mientras tanto, puedes usar:\n"
+                "• `/dona [tu solicitud]` - Para solicitudes generales\n"
+                "• `/dona-help` - Ver todos los comandos disponibles"
             )
             
         logger.info(f"Direct message handled for user {user}")

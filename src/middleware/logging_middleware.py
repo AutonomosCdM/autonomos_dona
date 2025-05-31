@@ -78,82 +78,89 @@ def logging_middleware(args, next):
     team_id = None
     
     # Extract request information
-    if 'command' in args:
+    command = getattr(args, 'command', None)
+    event = getattr(args, 'event', None)
+    action = getattr(args, 'action', None)
+    view = getattr(args, 'view', None)
+    context = getattr(args, 'context', {})
+    
+    if command:
         # Slash command
-        command_data = args['command']
-        request_type = f"command:{command_data.get('command', 'unknown')}"
-        user_id = command_data.get('user_id', 'unknown')
-        channel_id = command_data.get('channel_id')
-        team_id = command_data.get('team_id')
+        request_type = f"command:{command.get('command', 'unknown')}"
+        user_id = command.get('user_id', 'unknown')
+        channel_id = command.get('channel_id')
+        team_id = command.get('team_id')
         
         # Log command details
         logger.info(
             f"Command request: {request_id}",
             extra={
                 'request_id': request_id,
-                'command': command_data.get('command'),
-                'text': command_data.get('text', '')[:100],  # Truncate for privacy
+                'command': command.get('command'),
+                'text': command.get('text', '')[:100],  # Truncate for privacy
                 'user_id': user_id,
                 'channel_id': channel_id,
                 'team_id': team_id
             }
         )
     
-    elif 'event' in args:
+    elif event:
         # Event
-        event_data = args['event']
-        request_type = f"event:{event_data.get('type', 'unknown')}"
-        user_id = event_data.get('user', 'unknown')
-        channel_id = event_data.get('channel')
-        team_id = event_data.get('team')
+        request_type = f"event:{event.get('type', 'unknown')}"
+        user_id = event.get('user', 'unknown')
+        channel_id = event.get('channel')
+        team_id = event.get('team')
         
         # Log event details
         logger.info(
             f"Event request: {request_id}",
             extra={
                 'request_id': request_id,
-                'event_type': event_data.get('type'),
+                'event_type': event.get('type'),
                 'user_id': user_id,
                 'channel_id': channel_id,
-                'channel_type': event_data.get('channel_type'),
+                'channel_type': event.get('channel_type'),
                 'team_id': team_id
             }
         )
     
-    elif 'action' in args:
+    elif action:
         # Block action
-        action_data = args['action']
-        request_type = f"action:{action_data.get('action_id', 'unknown')}"
-        user_id = args.get('user', {}).get('id', 'unknown')
-        channel_id = args.get('channel', {}).get('id')
-        team_id = args.get('team', {}).get('id')
+        request_type = f"action:{action.get('action_id', 'unknown')}"
+        user = getattr(args, 'user', {})
+        channel = getattr(args, 'channel', {})
+        team = getattr(args, 'team', {})
+        user_id = user.get('id', 'unknown') if user else 'unknown'
+        channel_id = channel.get('id') if channel else None
+        team_id = team.get('id') if team else None
         
         # Log action details
         logger.info(
             f"Action request: {request_id}",
             extra={
                 'request_id': request_id,
-                'action_id': action_data.get('action_id'),
-                'action_type': action_data.get('type'),
+                'action_id': action.get('action_id'),
+                'action_type': action.get('type'),
                 'user_id': user_id,
                 'channel_id': channel_id,
                 'team_id': team_id
             }
         )
     
-    elif 'view' in args:
+    elif view:
         # Modal view submission
-        view_data = args['view']
-        request_type = f"view:{view_data.get('callback_id', 'unknown')}"
-        user_id = args.get('user', {}).get('id', 'unknown')
-        team_id = args.get('team', {}).get('id')
+        request_type = f"view:{view.get('callback_id', 'unknown')}"
+        user = getattr(args, 'user', {})
+        team = getattr(args, 'team', {})
+        user_id = user.get('id', 'unknown') if user else 'unknown'
+        team_id = team.get('id') if team else None
         
         # Log view submission details
         logger.info(
             f"View submission: {request_id}",
             extra={
                 'request_id': request_id,
-                'callback_id': view_data.get('callback_id'),
+                'callback_id': view.get('callback_id'),
                 'user_id': user_id,
                 'team_id': team_id
             }
@@ -168,7 +175,7 @@ def logging_middleware(args, next):
     request_logger.start_request(request_id, request_type, user_id, metadata)
     
     # Store request_id in context for error handling
-    args['context']['request_id'] = request_id
+    context['request_id'] = request_id
     
     try:
         # Call the next middleware or handler
@@ -256,19 +263,25 @@ def performance_middleware(args, next):
     finally:
         duration = time.time() - start_time
         
-        # Add performance data to context for other middleware
-        if 'performance' not in args['context']:
-            args['context']['performance'] = {}
+        # Get context properly from Args object
+        context = getattr(args, 'context', {})
         
-        args['context']['performance']['duration_ms'] = int(duration * 1000)
+        # Add performance data to context for other middleware
+        if 'performance' not in context:
+            context['performance'] = {}
+        
+        context['performance']['duration_ms'] = int(duration * 1000)
         
         # Log only if very slow
         if duration > 5.0:  # More than 5 seconds
             request_type = 'unknown'
-            if 'command' in args:
-                request_type = f"command:{args['command'].get('command', 'unknown')}"
-            elif 'event' in args:
-                request_type = f"event:{args['event'].get('type', 'unknown')}"
+            command = getattr(args, 'command', None)
+            event = getattr(args, 'event', None)
+            
+            if command:
+                request_type = f"command:{command.get('command', 'unknown')}"
+            elif event:
+                request_type = f"event:{event.get('type', 'unknown')}"
             
             logger.warning(
                 f"Very slow request: {request_type} took {duration:.2f}s",
@@ -290,32 +303,35 @@ def analytics_middleware(args, next):
         'metadata': {}
     }
     
+    # Get references to args attributes
+    command = getattr(args, 'command', None)
+    event = getattr(args, 'event', None)
+    context = getattr(args, 'context', {})
+    
     # Extract analytics data based on request type
-    if 'command' in args:
-        command_data = args['command']
+    if command:
         analytics_data.update({
-            'user_id': command_data.get('user_id'),
-            'team_id': command_data.get('team_id'),
+            'user_id': command.get('user_id'),
+            'team_id': command.get('team_id'),
             'interaction_type': 'command',
             'metadata': {
-                'command': command_data.get('command'),
-                'has_text': bool(command_data.get('text'))
+                'command': command.get('command'),
+                'has_text': bool(command.get('text'))
             }
         })
-    elif 'event' in args:
-        event_data = args['event']
+    elif event:
         analytics_data.update({
-            'user_id': event_data.get('user'),
-            'team_id': event_data.get('team'),
+            'user_id': event.get('user'),
+            'team_id': event.get('team'),
             'interaction_type': 'event',
             'metadata': {
-                'event_type': event_data.get('type'),
-                'channel_type': event_data.get('channel_type')
+                'event_type': event.get('type'),
+                'channel_type': event.get('channel_type')
             }
         })
     
     # Store analytics data in context for handlers to use
-    args['context']['analytics'] = analytics_data
+    context['analytics'] = analytics_data
     
     # Log analytics event (could be sent to analytics service)
     logger.debug(

@@ -1,7 +1,7 @@
 """Simplified tests for command handlers that work without complex mocking."""
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 
 from src.handlers.commands import (
     handle_dona_command,
@@ -12,13 +12,20 @@ from src.handlers.commands import (
     handle_status_command,
     register_command_handlers
 )
+from src.utils.context_manager import ContextType
 
 
 class TestCommandHandlers:
     """Test command handlers with basic functionality."""
     
-    def test_dona_help_response(self):
+    @patch('src.handlers.commands.get_slack_service')
+    def test_dona_help_response(self, mock_get_slack_service):
         """Test that /dona with help text calls help handler."""
+        # Mock the slack service
+        mock_slack_service = MagicMock()
+        mock_slack_service.context_manager.get_context_type.return_value = ContextType.PUBLIC
+        mock_get_slack_service.return_value = mock_slack_service
+        
         ack = Mock()
         respond = Mock()
         command = {
@@ -34,13 +41,23 @@ class TestCommandHandlers:
         
         handle_dona_command(ack, respond, command, context)
         
-        # The dona command calls ack once, then calls help command which also calls ack
-        assert ack.call_count == 2
-        # Help command should have been called
-        assert respond.call_count >= 1
+        # The dona command calls ack once and responds with help text
+        assert ack.call_count == 1
+        # Should respond with help information
+        assert respond.call_count == 1
+        # Verify response contains help text
+        response = respond.call_args[0][0]
+        assert "Soy Dona" in response
+        assert "Comandos disponibles" in response
     
-    def test_help_command_response(self):
+    @patch('src.handlers.commands.get_slack_service')
+    def test_help_command_response(self, mock_get_slack_service):
         """Test help command returns help text."""
+        # Mock the slack service
+        mock_slack_service = MagicMock()
+        mock_slack_service.context_manager.get_context_type.return_value = ContextType.PUBLIC
+        mock_get_slack_service.return_value = mock_slack_service
+        
         ack = Mock()
         respond = Mock()
         command = {"user_id": "U123456", "channel_id": "C123456"}
@@ -114,8 +131,13 @@ class TestCommandHandlers:
         # Should show usage or error message in Spanish
         assert "especifica" in response or "Usage" in response
     
-    def test_summary_command_period_validation(self):
+    @patch('src.handlers.commands.get_supabase_service')
+    def test_summary_command_period_validation(self, mock_get_supabase_service):
         """Test summary command validates period."""
+        # Mock the supabase service
+        mock_supabase_service = MagicMock()
+        mock_get_supabase_service.return_value = mock_supabase_service
+        
         ack = Mock()
         respond = Mock()
         command = {
@@ -134,8 +156,13 @@ class TestCommandHandlers:
         assert "today" in response or "hoy" in response
         assert "week" in response or "semana" in response
     
-    def test_status_command_without_service(self):
+    @patch('src.handlers.commands.get_supabase_service')
+    def test_status_command_without_service(self, mock_get_supabase_service):
         """Test status command handles missing service gracefully."""
+        # Mock the supabase service
+        mock_supabase_service = MagicMock()
+        mock_get_supabase_service.return_value = mock_supabase_service
+        
         ack = Mock()
         respond = Mock()
         command = {
