@@ -1,5 +1,10 @@
 # Autónomos Dona Slack Bot
 
+[![CI Pipeline](https://github.com/autonomos-team/autonomos_dona/actions/workflows/ci.yml/badge.svg)](https://github.com/autonomos-team/autonomos_dona/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/autonomos-team/autonomos_dona/branch/main/graph/badge.svg)](https://codecov.io/gh/autonomos-team/autonomos_dona)
+[![Python Version](https://img.shields.io/badge/python-3.9%20|%203.10%20|%203.11-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A powerful Slack bot designed to help autonomous workers and freelancers manage their tasks, track time, and collaborate effectively.
 
 ## Features
