@@ -653,14 +653,18 @@ class SupabaseService:
 _supabase_service: Optional[SupabaseService] = None
 
 
-def get_supabase_service() -> SupabaseService:
+def get_supabase_service() -> Optional[SupabaseService]:
     """
     Get the singleton Supabase service instance.
     
     Returns:
-        SupabaseService instance
+        SupabaseService instance or None if not available
     """
     global _supabase_service
     if _supabase_service is None:
-        _supabase_service = SupabaseService()
+        try:
+            _supabase_service = SupabaseService()
+        except Exception as e:
+            logger.warning(f"Could not create Supabase service: {e}")
+            return None
     return _supabase_service
