@@ -1,0 +1,40 @@
+services:
+  - type: background_worker
+    name: dona-slack-bot
+    runtime: python3
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m src.app
+    repo: https://github.com/AutonomosCdM/autonomos_dona
+    branch: main
+    envVars:
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_APP_TOKEN  
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+      - key: SLACK_WORKSPACE_ID
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DEBUG
+        value: "False"
+      - key: ENV
+        value: production
+      - key: RATE_LIMIT_ENABLED
+        value: "True"
+      - key: RATE_LIMIT_USER_MAX
+        value: "60"
+      - key: RATE_LIMIT_USER_BURST
+        value: "10"
+      - key: RATE_LIMIT_CLEANUP_INTERVAL
+        value: "3600"
