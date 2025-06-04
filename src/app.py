@@ -88,15 +88,9 @@ def create_app(token_verification_enabled=True) -> App:
     app.middleware(add_context_middleware)  # Context enrichment
     
     # Initialize services
-    # TODO: Temporarily disable Supabase due to dependency conflicts in production
-    try:
-        supabase_service = SupabaseService()
-        app._supabase = supabase_service  # Store as app attribute for access in handlers
-        logger.info("Supabase service initialized successfully")
-    except Exception as e:
-        logger.warning(f"Supabase service failed to initialize: {e}")
-        logger.info("Bot will run without persistent storage (memory only)")
-        app._supabase = None  # Set to None to indicate no Supabase
+    # TODO: Temporarily disable Supabase completely due to dependency conflicts in production
+    logger.info("Supabase temporarily disabled - bot will run without persistent storage (memory only)")
+    app._supabase = None  # Set to None to indicate no Supabase
     
     # Configure rate limits from settings
     if settings.RATE_LIMIT_ENABLED:
