@@ -5,15 +5,15 @@
 [![Python Version](https://img.shields.io/badge/python-3.9%20|%203.10%20|%203.11-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A powerful Slack bot designed to help autonomous workers and freelancers manage their tasks, track time, and collaborate effectively.
+An AI-powered Slack assistant designed specifically for the founding team of Autónomos startup. Dona helps with task management, productivity analytics, and intelligent conversation.
 
-## Features
+## What Dona Actually Does
 
-- **Task Management**: Create, update, and track tasks directly from Slack
-- **Time Tracking**: Start/stop timers and log work hours
-- **Status Dashboard**: View your productivity metrics and current activities
-- **Smart Notifications**: Get reminded about important tasks and deadlines
-- **Team Collaboration**: Share progress and coordinate with team members
+- **Natural Language Chat**: Responds intelligently in Spanish/English using Groq LLM
+- **Task Management**: Create, list, and complete tasks with full tracking
+- **Productivity Analytics**: Real summaries and statistics from your Slack activity
+- **Personal Configuration**: Set language, timezone, and notification preferences
+- **Context Awareness**: Adapts responses for public channels vs private messages
 
 ## Quick Start
 
@@ -53,20 +53,25 @@ cp .env.example .env
 make run
 ```
 
-## Available Commands
+## Working Commands
 
-- `/dona-help` - Display help information
-- `/dona-task [create|list|update]` - Manage tasks
-- `/dona-time [start|stop|log]` - Track time
-- `/dona-status` - View your current status
+- `/dona [message]` - Chat naturally with AI assistant
+- `/dona-help` - Context-aware help (different for public/private)
+- `/dona-task create [description]` - Create new task
+- `/dona-task list [status]` - List your tasks  
+- `/dona-task complete [task-id]` - Mark task as done
+- `/dona-summary [today|week]` - Get productivity analytics
+- `/dona-status` - Your personal statistics and current state
+- `/dona-config` - View/update personal preferences
 
-### Examples
+### Real Examples
 
 ```
-/dona-task create Fix login bug
-/dona-time start
-/dona-task list
-/dona-status
+/dona necesito crear una presentación para el board
+/dona-task create Revisar contratos Q4
+/dona-task list pending
+/dona-summary week
+/dona-config language en
 ```
 
 ## Project Structure
@@ -122,8 +127,9 @@ The bot requires the following environment variables:
 | `SLACK_SIGNING_SECRET` | Signing Secret |
 | `SUPABASE_URL` | Supabase Project URL |
 | `SUPABASE_KEY` | Supabase Anonymous Key |
+| `GROQ_API_KEY` | Groq API Key for LLM |
 
-See [docs/setup.md](docs/setup.md) for detailed configuration instructions.
+Current project uses Supabase project: `wqqxctsyoeoqcqkoaagv`
 
 ## Architecture
 
@@ -178,13 +184,13 @@ make dev
 
 ### Production
 
-The bot can be deployed using:
-- Docker containers
-- Kubernetes
-- Cloud platforms (Heroku, AWS, GCP)
-- Traditional VPS with systemd
+Currently deployed on Render.com using:
+- Background worker service
+- Python 3.9 runtime  
+- Supabase as database
+- Socket Mode for Slack connectivity
 
-See deployment guide in [docs/deployment.md](docs/deployment.md) for details.
+Configuration in `render.yaml`
 
 ## Troubleshooting
 

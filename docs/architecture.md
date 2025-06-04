@@ -92,19 +92,19 @@ The core application logic is organized into specialized handlers:
 Domain-specific logic is encapsulated in service modules:
 
 **Task Management:**
-- Create, update, and track tasks
-- Assign priorities and due dates
-- Generate task reports
+- Create, list, and complete tasks ✅
+- Assign priorities ✅
+- Basic task tracking ✅
 
-**Time Tracking:**
-- Start/stop time entries
-- Associate time with tasks
-- Calculate durations and summaries
+**LLM Integration:**
+- Natural language processing ✅
+- Intent extraction ✅
+- Bilingual responses (ES/EN) ✅
 
 **User Management:**
-- User registration and profiles
-- Permission management
-- Activity tracking
+- User registration and profiles ✅
+- Activity tracking ✅
+- Personal preferences ✅
 
 ### 4. Data Persistence Layer
 
@@ -258,33 +258,30 @@ python -m src.app --reload
 Local → GitHub → CI/CD → Staging → Production
 ```
 
-## Future Enhancements
+## Known Limitations
 
-### 1. Agent Architecture
+### 1. Missing Features (TODOs)
 
-Planned evolution to support multiple AI agents:
-- Calendar Agent integration
-- Email Agent integration
-- Document Agent integration
+Current gaps in functionality:
+- Reminder scheduling (fake responses only)
+- Time tracking (not implemented)
+- Task updates (only create/list/complete)
 
-### 2. Advanced Features
+### 2. Current Scope
 
-- Natural language processing
-- Predictive task suggestions
-- Automated workflow creation
-
-### 3. Platform Expansion
-
-- Microsoft Teams support
-- Web dashboard
-- Mobile companion app
+Dona is focused on:
+- Slack-only integration
+- Basic task management
+- Conversation analytics
+- Personal productivity insights
 
 ## Technology Stack Summary
 
 - **Language:** Python 3.9+
-- **Framework:** Slack Bolt
-- **Database:** Supabase (PostgreSQL)
+- **Framework:** Slack Bolt (Socket Mode)
+- **Database:** Supabase (PostgreSQL) - project: wqqxctsyoeoqcqkoaagv
+- **LLM:** Groq API (Llama 3.1-8B-Instant)
 - **Authentication:** Slack OAuth
-- **Deployment:** Docker/Kubernetes ready
-- **Monitoring:** Structured logging
+- **Deployment:** Render.com (Background Worker)
+- **Monitoring:** Structured logging + Rate limiting
 - **Testing:** Pytest framework
