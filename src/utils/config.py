@@ -14,9 +14,9 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
-# Load environment variables from .env file
+# Load environment variables from .env file (force reload)
 env_path = Path(__file__).parent.parent.parent / ".env"
-load_dotenv(env_path)
+load_dotenv(env_path, override=True)
 
 
 class Settings(BaseSettings):
