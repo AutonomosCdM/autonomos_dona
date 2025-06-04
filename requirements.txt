@@ -6,7 +6,7 @@ slack-sdk==3.27.1
 supabase==2.15.2
 
 # Environment configuration
-python-dotenv==1.0.1
+python-dotenv==1.1.0
 
 # Data validation
 pydantic==2.6.4

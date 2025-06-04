@@ -3,7 +3,7 @@ slack-bolt==1.18.1
 slack-sdk==3.27.1
 
 # Environment and configuration
-python-dotenv==1.0.1
+python-dotenv==1.1.0
 
 # Database - Temporarily disabled due to dependency conflicts
 # supabase==2.7.0
