@@ -1,31 +1,29 @@
-# Slack SDK and Bolt framework
+# Essential Slack SDK dependencies
 slack-bolt==1.18.1
 slack-sdk==3.27.1
 
-# Environment and configuration
-python-dotenv==1.0.1
+# Database - Latest stable Supabase
+supabase==2.15.2
 
-# Database - Temporarily disabled due to dependency conflicts
-# supabase==2.7.0
-# httpx==0.27.0
+# Environment configuration
+python-dotenv==1.0.1
 
 # Data validation
 pydantic==2.6.4
 pydantic-settings==2.2.1
 
-# Testing
+# LLM Integration (Groq)
+groq==0.4.1
+
+# Testing (only needed for development)
 pytest==8.1.1
 pytest-asyncio==0.23.6
 pytest-mock==3.12.0
 
-# Code quality
+# Code quality (only needed for development)
 black==24.3.0
 flake8==7.0.0
 isort==5.13.2
 
-# LLM Integration
-groq==0.4.1
-
-# Additional utilities  
-# aiohttp==3.9.3  # Commented due to realtime dependency conflict
+# Basic HTTP requests
 requests==2.31.0

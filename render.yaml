@@ -3,7 +3,7 @@ services:
     name: dona-slack-bot
     runtime: python3
     plan: starter
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements_minimal.txt
     startCommand: python -m src.app
     repo: https://github.com/AutonomosCdM/autonomos_dona
     branch: main
@@ -17,9 +17,9 @@ services:
       - key: SLACK_WORKSPACE_ID
         sync: false
       - key: SUPABASE_URL
-        sync: false
+        value: https://wqqxctsyoeoqcqkoaagv.supabase.co
       - key: SUPABASE_KEY
-        sync: false
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxcXhjdHN5b2VvcWNxa29hYWd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkwNzQ5OTgsImV4cCI6MjA2NDY1MDk5OH0.G36sYmBucD8Ow058j2lrTsLQIQRQGfuRi6_cb6Cmjs8
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
@@ -38,3 +38,5 @@ services:
         value: "10"
       - key: RATE_LIMIT_CLEANUP_INTERVAL
         value: "3600"
+      - key: PYTHON_VERSION
+        value: "3.9"

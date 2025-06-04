@@ -17,7 +17,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from src.handlers.commands import register_command_handlers
 from src.handlers.events import register_event_handlers
-# from src.services.supabase_client import SupabaseService  # Temporarily disabled
+from src.services.supabase_client import SupabaseService
 from src.utils.config import settings
 from src.utils.logger import setup_logging
 from src.middleware.logging_middleware import (
@@ -88,9 +88,14 @@ def create_app(token_verification_enabled=True) -> App:
     app.middleware(add_context_middleware)  # Context enrichment
     
     # Initialize services
-    # TODO: Temporarily disable Supabase completely due to dependency conflicts in production
-    logger.info("Supabase temporarily disabled - bot will run without persistent storage (memory only)")
-    app._supabase = None  # Set to None to indicate no Supabase
+    try:
+        supabase_service = SupabaseService()
+        app._supabase = supabase_service
+        logger.info("Supabase service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Supabase: {e}")
+        logger.info("Bot will run without persistent storage (memory only)")
+        app._supabase = None
     
     # Configure rate limits from settings
     if settings.RATE_LIMIT_ENABLED:
