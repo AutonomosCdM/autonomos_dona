@@ -44,9 +44,9 @@ autonomos_dona/
 ## Key Technologies
 
 - **Python 3.9+** with Slack Bolt framework
-- **Supabase** for data persistence
-- **Slack API** for bot functionality
-- **Agent-to-Agent (A2A)** architecture for future integrations
+- **Slack API** with Socket Mode for real-time communication
+- **Supabase** for data persistence and user management
+- **Groq LLM** for intelligent natural language responses
 
 ## Development Workflow
 
