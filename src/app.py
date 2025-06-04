@@ -17,7 +17,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from src.handlers.commands import register_command_handlers
 from src.handlers.events import register_event_handlers
-from src.services.supabase_client import SupabaseService
+# from src.services.supabase_client import SupabaseService  # Temporarily disabled
 from src.utils.config import settings
 from src.utils.logger import setup_logging
 from src.middleware.logging_middleware import (
