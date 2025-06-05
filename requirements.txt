@@ -1,6 +1,9 @@
 # Essential Slack SDK dependencies
-slack-bolt==1.18.1
+slack-bolt==1.23.0
 slack-sdk==3.27.1
+
+# Web framework for HTTP endpoints
+flask==3.0.3
 
 # Database - Latest stable Supabase
 supabase==2.15.2
