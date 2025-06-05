@@ -24,7 +24,7 @@ flake8==7.0.0
 isort==5.13.2
 
 # LLM Integration
-groq==0.4.1
+groq==0.26.0
 
 # Additional utilities  
 # aiohttp==3.9.3  # Commented due to realtime dependency conflict
