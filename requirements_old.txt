@@ -1,5 +1,5 @@
 # Slack SDK and Bolt framework
-slack-bolt==1.18.1
+slack-bolt==1.23.0
 slack-sdk==3.27.1
 
 # Environment and configuration
