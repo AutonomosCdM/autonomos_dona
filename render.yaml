@@ -1,5 +1,5 @@
 services:
-  - type: background_worker
+  - type: web
     name: dona-slack-bot
     runtime: python3
     plan: starter

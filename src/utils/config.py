@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field("INFO", description="Logging level")
     DEBUG: bool = Field(False, description="Debug mode")
     ENV: str = Field("development", description="Environment (development, test, production)")
+    PORT: int = Field(8000, description="Server port")
     ADMIN_USERS: str = Field("", description="Comma-separated list of admin user IDs")
     
     # Rate Limiting Configuration

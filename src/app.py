@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from slack_bolt import App
-from slack_bolt.adapter.socket_mode import SocketModeHandler
+from slack_bolt.adapter.flask import SlackRequestHandler
 
 from src.handlers.commands import register_command_handlers
 from src.handlers.events import register_event_handlers
@@ -142,11 +142,21 @@ def main():
                 cleanup_thread.start()
                 logger.info("Rate limiter cleanup thread started")
         
-        # Start the app using Socket Mode
-        handler = SocketModeHandler(app, settings.SLACK_APP_TOKEN)
+        # Start the app using HTTP Mode with Flask
+        from flask import Flask, request
+        flask_app = Flask(__name__)
+        handler = SlackRequestHandler(app)
+        
+        @flask_app.route("/slack/events", methods=["POST"])
+        def slack_events():
+            return handler.handle(request)
+        
+        @flask_app.route("/health", methods=["GET"])
+        def health_check():
+            return {"status": "healthy", "service": "dona-slack-bot"}, 200
         
         logger.info("Bot is running! Press Ctrl+C to stop.")
-        handler.start()
+        flask_app.run(host="0.0.0.0", port=int(settings.PORT), debug=False)
         
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
