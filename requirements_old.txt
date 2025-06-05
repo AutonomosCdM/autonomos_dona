@@ -28,4 +28,4 @@ groq==0.4.1
 
 # Additional utilities  
 # aiohttp==3.9.3  # Commented due to realtime dependency conflict
-requests==2.31.0
+requests==2.32.3
