@@ -21,7 +21,7 @@ pytest-mock==3.12.0
 # Code quality
 black==24.3.0
 flake8==7.0.0
-isort==5.13.2
+isort==6.0.1
 
 # LLM Integration
 groq==0.4.1
